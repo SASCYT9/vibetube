@@ -86,6 +86,7 @@ const accountBackBtn = document.getElementById('account-back-btn');
 const eqModalOverlay = document.getElementById('eq-modal-overlay');
 const eqToggleBtn = document.getElementById('eq-toggle-btn');
 const eqModalCloseBtn = document.getElementById('eq-modal-close-btn');
+const miniPlayerBtn = document.getElementById('mini-player-btn');
 
 // Player UI Elements
 const trackArtwork = document.getElementById('track-artwork');
@@ -592,6 +593,29 @@ function setupEventListeners() {
     eqToggleBtn.addEventListener('click', () => {
         eqModalOverlay.classList.add('active');
     });
+
+    // Mini-player Mode Toggle
+    let isMiniPlayer = false;
+    if (miniPlayerBtn) {
+        miniPlayerBtn.addEventListener('click', () => {
+            isMiniPlayer = !isMiniPlayer;
+            if (isMiniPlayer) {
+                document.body.classList.add('mini-player-active');
+                miniPlayerBtn.innerHTML = '<i class="fa-solid fa-expand"></i> Звичайний';
+                miniPlayerBtn.title = "Повернути стандартний вигляд";
+                if (window.electronAPI && window.electronAPI.toggleMiniPlayer) {
+                    window.electronAPI.toggleMiniPlayer(true);
+                }
+            } else {
+                document.body.classList.remove('mini-player-active');
+                miniPlayerBtn.innerHTML = '<i class="fa-solid fa-window-restore"></i> Міні-плеєр';
+                miniPlayerBtn.title = "Компактний міні-плеєр";
+                if (window.electronAPI && window.electronAPI.toggleMiniPlayer) {
+                    window.electronAPI.toggleMiniPlayer(false);
+                }
+            }
+        });
+    }
 
     eqModalCloseBtn.addEventListener('click', () => {
         eqModalOverlay.classList.remove('active');

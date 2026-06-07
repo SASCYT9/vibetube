@@ -24,6 +24,24 @@ ipcMain.on('window-close', () => {
     if (mainWindow) mainWindow.close();
 });
 
+// Toggle mini player size and properties
+ipcMain.on('window-toggle-mini', (event, isMini) => {
+    if (mainWindow) {
+        if (isMini) {
+            mainWindow.setMinimumSize(340, 400);
+            mainWindow.setSize(340, 400);
+            mainWindow.setAlwaysOnTop(true);
+            mainWindow.setResizable(false);
+        } else {
+            mainWindow.setResizable(true);
+            mainWindow.setMinimumSize(800, 600);
+            mainWindow.setSize(1250, 850);
+            mainWindow.setAlwaysOnTop(false);
+            mainWindow.center();
+        }
+    }
+});
+
 // Update Windows Taskbar progress bar
 ipcMain.on('playback-progress-changed', (event, percentage) => {
     if (mainWindow) {

@@ -163,7 +163,10 @@
                         </div>
                         <div class="mode-container">
                             <button id="visualizer-mode-btn" class="mode-btn" title="Змінити режим візуалізації">
-                                <i class="fa-solid fa-chart-simple"></i> Режим: Смуги & Хвиля
+                                <i class="fa-solid fa-chart-simple"></i> Візуалізація
+                            </button>
+                            <button id="mini-player-btn" class="mode-btn" title="Компактний міні-плеєр">
+                                <i class="fa-solid fa-window-restore"></i> Міні-плеєр
                             </button>
                             <button id="eq-toggle-btn" class="mode-btn" title="Графічний Еквалайзер">
                                 <i class="fa-solid fa-sliders"></i> Еквалайзер
@@ -246,7 +249,7 @@
                         <!-- Playlist Tracks List view -->
                         <div class="results-list" id="account-list" style="display: none;"></div>
                         
-                        <div class="empty-state" id="account-empty">
+                        <div class="empty-state" id="account-empty" style="display: none;">
                             <i class="fa-solid fa-user-lock"></i>
                             <p>Оберіть розділ або зачекайте завантаження ваших плейлистів з Firefox</p>
                         </div>
