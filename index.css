@@ -1111,6 +1111,13 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     border-color: rgba(168, 85, 247, 0.2);
 }
 
+.track-item.dragging {
+    opacity: 0.4;
+    border: 1px dashed var(--neon-cyan);
+    background: rgba(34, 211, 238, 0.05);
+    transform: scale(0.98);
+}
+
 .track-item.playing .track-item-title {
     color: var(--neon-cyan);
 }

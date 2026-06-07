@@ -233,6 +233,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize Theme and Customization Settings
     initThemeSettings();
+
+    // Listen to global shortcuts and tray actions from Electron
+    if (window.electronAPI && typeof window.electronAPI.onGlobalShortcutMedia === 'function') {
+        window.electronAPI.onGlobalShortcutMedia((action) => {
+            console.log(`Global media shortcut event: ${action}`);
+            if (action === 'play-pause') {
+                togglePlayback();
+            } else if (action === 'next') {
+                playNext();
+            } else if (action === 'prev') {
+                playPrevious();
+            }
+        });
+    }
 });
 
 // Setup All Events
@@ -288,6 +302,7 @@ function setupEventListeners() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'playing';
         }
+        updateDiscordPresence();
     });
     audio.addEventListener('pause', () => {
         isPlaying = false;
@@ -301,6 +316,7 @@ function setupEventListeners() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'paused';
         }
+        updateDiscordPresence();
     });
 
     // Volume
@@ -902,6 +918,10 @@ function renderResultsList() {
             item.classList.add('playing');
         }
         
+        // Enable drag & drop for manual queue sorting
+        item.draggable = true;
+        item.dataset.index = index;
+        
         item.innerHTML = `
             <div class="track-item-thumb" style="background-image: url('${track.thumbnail}')">
                 <div class="track-item-thumb-play">
@@ -915,7 +935,60 @@ function renderResultsList() {
             <div class="track-item-duration">${track.duration}</div>
         `;
         
-        item.addEventListener('click', () => playTrack(track, index, currentPlaylist));
+        // Drag events
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', index);
+            item.classList.add('dragging');
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+        });
+        
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const draggingItem = resultsList.querySelector('.dragging');
+            if (draggingItem && draggingItem !== item) {
+                const rect = item.getBoundingClientRect();
+                const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+                resultsList.insertBefore(draggingItem, next ? item.nextSibling : item);
+            }
+        });
+        
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const items = Array.from(resultsList.querySelectorAll('.track-item'));
+            const toIndex = items.indexOf(item);
+            
+            if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0) {
+                // Reorder currentPlaylist
+                const [moved] = currentPlaylist.splice(fromIndex, 1);
+                currentPlaylist.splice(toIndex, 0, moved);
+                
+                // If the currently playing track moved, update currentIndex
+                if (currentIndex === fromIndex) {
+                    currentIndex = toIndex;
+                } else if (currentIndex > fromIndex && currentIndex <= toIndex) {
+                    currentIndex--;
+                } else if (currentIndex < fromIndex && currentIndex >= toIndex) {
+                    currentIndex++;
+                }
+                
+                // Save state to local storage to remember queue order
+                localStorage.setItem('vibetube_last_playlist', JSON.stringify(currentPlaylist));
+                localStorage.setItem('vibetube_last_index', currentIndex);
+                
+                // Re-render
+                renderResultsList();
+                updatePlaylistItemsUI();
+            }
+        });
+        
+        item.addEventListener('click', () => {
+            playTrack(track, index, currentPlaylist);
+        });
+        
         resultsList.appendChild(item);
     });
 }
@@ -973,7 +1046,7 @@ async function loadUserPlaylist(type) {
     accountList.innerHTML = `
         <div class="spinner-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; color: var(--text-muted);">
             <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2rem; color: var(--neon-cyan);"></i>
-            <p style="margin-top: 10px; text-align: center;">Завантаження з вашого YouTube-акаунта Firefox...</p>
+            <p style="margin-top: 10px; text-align: center;">Завантаження з вашого YouTube-акаунта в браузері...</p>
         </div>
     `;
     
@@ -991,7 +1064,7 @@ async function loadUserPlaylist(type) {
         accountEmpty.style.display = 'flex';
         accountEmpty.innerHTML = `
             <i class="fa-solid fa-triangle-exclamation text-red" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.8;"></i>
-            <p>Не вдалося завантажити треки. Переконайтеся, що ви авторизовані в YouTube у браузері Firefox на цьому комп'ютері.</p>
+            <p>Не вдалося завантажити треки. Переконайтеся, що ви авторизовані в YouTube у вашому браузері (Firefox, Chrome, Brave тощо) на цьому комп'ютері.</p>
         `;
     }
 }
@@ -1032,7 +1105,7 @@ async function loadCustomPlaylist() {
         accountEmpty.style.display = 'flex';
         accountEmpty.innerHTML = `
             <i class="fa-solid fa-triangle-exclamation text-red" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.8;"></i>
-            <p>Не вдалося завантажити треки за цим посиланням. Переконайтеся, що посилання правильне, публічне або доступне у вашому Firefox.</p>
+            <p>Не вдалося завантажити треки за цим посиланням. Переконайтеся, що посилання правильне, публічне або доступне у вашому браузері.</p>
         `;
     } finally {
         loadCustomPlaylistBtn.disabled = false;
@@ -1044,6 +1117,9 @@ async function loadCustomPlaylist() {
 async function loadUserPlaylistsList() {
     // Only load once per application startup to avoid constant slow network requests
     if (userPlaylistsLoaded) return;
+    
+    // Explicitly hide account-empty on startup to make sure it doesn't leak
+    if (accountEmpty) accountEmpty.style.display = 'none';
     
     try {
         const response = await fetch('/api/user_playlists_list');
@@ -1057,7 +1133,7 @@ async function loadUserPlaylistsList() {
         console.error("Failed to load user playlists list:", err);
         playlistsGrid.innerHTML = `
             <p style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-                Не вдалося отримати ваші плейлисти. Переконайтеся, що ви авторизовані в YouTube у Firefox.
+                Не вдалося отримати ваші плейлисти. Переконайтеся, що ви авторизовані в YouTube у вашому браузері (Firefox, Chrome, Brave тощо).
             </p>
         `;
     }
@@ -2202,7 +2278,7 @@ function startVisualizer() {
                         }
                         
                         const isActive = s < activeSegments;
-                        canvasCtx.fillStyle = color + (isActive ? '0.85)' : '0.04)';
+                        canvasCtx.fillStyle = color + (isActive ? '0.85)' : '0.04)');
                         
                         if (isActive) {
                             canvasCtx.shadowBlur = 8;
@@ -2585,7 +2661,7 @@ async function syncYoutubeHistory() {
         historyEmpty.style.display = 'flex';
         historyEmpty.innerHTML = `
             <i class="fa-solid fa-triangle-exclamation text-red" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.8;"></i>
-            <p>Не вдалося завантажити історію. Переконайтеся, що ви авторизовані в YouTube у браузері Firefox на цьому комп'ютері.</p>
+            <p>Не вдалося завантажити історію. Переконайтеся, що ви авторизовані в YouTube у вашому браузері (Firefox, Chrome, Brave тощо) на цьому комп'ютері.</p>
         `;
     }
 }
@@ -2744,6 +2820,21 @@ function initMediaSessionHandlers() {
     }
 }
 
+function updateDiscordPresence() {
+    if (window.electronAPI && typeof window.electronAPI.updateTrackMetadata === 'function') {
+        const track = currentIndex !== -1 ? activePlaylist[currentIndex] : null;
+        if (track) {
+            window.electronAPI.updateTrackMetadata({
+                title: track.title,
+                artist: track.channel,
+                isPlaying: isPlaying,
+                duration: audio.duration,
+                currentTime: audio.currentTime
+            });
+        }
+    }
+}
+
 // Update system media controls across platforms (MPRIS on Linux + Media Session on Windows/macOS)
 function updateSystemMediaControls(track) {
     if (!track) return;
@@ -2773,6 +2864,9 @@ function updateSystemMediaControls(track) {
 
     // 3. Show native OS desktop notification
     showTrackNotification(track);
+
+    // 4. Update Discord Rich Presence status
+    updateDiscordPresence();
 }
 
 // Track change desktop notification handler to prevent overlapping notification spam

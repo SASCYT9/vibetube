@@ -25,11 +25,15 @@
   * Presets selector: `Flat`, `Bass Boost`, `Vocal Boost`, `Pop`, `Rock`, `Jazz`, `Electronic`.
   * Advanced effects: Reverb depth control, playback speed slider, and quick presets (**Nightcore** & **Slowed & Reverb**).
 * **📊 Beat-Reactive Visualizers:** 7 dynamic visualizers (Bars, Wave, Spikes, Spectrum, Decibels, Battery, Particle). The main visualizer container shadow, background aura, and square album artwork pulse and scale in real-time to the audio's bass frequencies.
-* **🐧 Native Linux System Integration (MPRIS):**
+* **🐧 Native Linux System Integration (MPRIS & Media Keys):**
   * Fully integrated with the Linux system tray media controls (GNOME, KDE Plasma, XFCE).
   * **Local Album Art Cache:** Automatically downloads remote thumbnails, saves them locally to `.cache/`, and updates MPRIS using `file://` URIs, forcing Linux notifications and lock screen widgets to render the covers correctly.
-  * Native media keys (Play/Pause, Next, Previous, Volume, Stop) are fully bound through D-Bus properties.
-* **📂 Firefox Library Sync:** Directly queries Firefox SQLite cookies databases to automatically synchronize your YouTube search history, playlists, liked tracks, and history on startup.
+  * Native media keys (Play/Pause, Next, Previous, Volume, Stop) are fully bound through D-Bus and global keyboard listener properties.
+* **📂 Multi-Browser Library Sync:** Automatically detects active cookies from Firefox, Chrome, Brave, Chromium, Opera, and Microsoft Edge, dynamically fetching search history, playlists, liked tracks, and history on startup.
+* **🔊 Discord Rich Presence (RPC):** Native Unix Socket / Named Pipe client showing the currently playing song, channel, duration, and time remaining inside your Discord profile status.
+* **⚡ Background Audio Caching:** Background download thread using `yt-dlp` saves active tracks to `.cache/` on disk, serving them locally with byte-range seek support to eliminate network lag on subsequent playbacks.
+* **🔄 Drag & Drop Playlist Queue:** Reorder your queue interactively using native HTML5 drag and drop, with state persistent on reload.
+* **📥 Autostart & System Tray:** Auto-creates a `.desktop` startup entry on Linux or registers login items on Windows/macOS. Minimize-to-tray keeps the music playing seamlessly in the background.
 
 ---
 
@@ -140,9 +144,14 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 * **🧠 Смарт-фільтр YouTube Shorts:** Автоматично приховує відео коротше 60 секунд або з посиланнями `/shorts/`.
 * **🎛️ Еквалайзер у модальному вікні:** 7-смуговий еквалайзер, пресети, контроль Bass Boost та Reverb, ефекти Nightcore / Slowed & Reverb.
 * **📊 Реактивний візуалізатор:** 7 режимів відображення; обкладинка та світіння вікна динамічно пульсують і змінюють розміри в такт низьким частотам.
-* **🐧 Повна Linux-інтеграція (MPRIS):**
-  * Підтримка медіаклавіш системи та системного трею.
+* **🐧 Повна Linux-інтеграція (MPRIS та медіаклавіші):**
+  * Підтримка медіаклавіш системи та системного трею через D-Bus та глобальний слухач клавіатури.
   * **Локальний кеш обкладинок:** Сервер скачує прев'ю у `.cache/current_art.jpg` та підключає їх до MPRIS за протоколом `file://`, що забезпечує 100% відображення обкладинок у сповіщеннях та на екрані блокування Linux.
+* **📂 Імпорт бібліотеки з кількох браузерів:** Автоматично сканує Firefox, Chrome, Brave, Chromium, Opera та Edge для синхронізації плейлистів, історії та вподобань.
+* **🔊 Discord Rich Presence (RPC):** Відображає назву пісні, виконавця, прогрес та час до кінця треку у вашому статусі Discord.
+* **⚡ Локальне фонове кешування:** Фонове завантаження через `yt-dlp` зберігає треки в папку `.cache/` на диску та віддає їх миттєво з підтримкою перемотування.
+* **🔄 Перетягування черги (Drag & Drop):** Інтерактивна зміна порядку треків у списку з автоматичним збереженням стану.
+* **📥 Автозапуск та системний трей:** Створення `.desktop`-файлу автозапуску на Linux або налаштування автозапуску в реєстрі Windows/macOS. Згортання додатка в трей замість виходу.
 
 ## 🚀 Запуск додатка
 1. Встановіть залежності:

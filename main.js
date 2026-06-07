@@ -1,9 +1,11 @@
-const { app, BrowserWindow, ipcMain, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
 let pyServer = null;
+let tray = null;
+let isQuitting = false;
 
 // IPC handlers for custom frameless window title bar controls
 ipcMain.handle('get-system-accent-color', () => {
@@ -69,6 +71,120 @@ ipcMain.on('playback-progress-changed', (event, percentage) => {
     }
 });
 
+// Discord Rich Presence (RPC) Implementation via Native Unix Socket / Win Named Pipe
+let rpcSocket = null;
+const DISCORD_CLIENT_ID = '1198547463560634458'; // VibeTube client ID
+
+const getIpcPath = () => {
+    const fs = require('fs');
+    if (process.platform === 'win32') return '\\\\.\\pipe\\discord-ipc-0';
+    const envs = ['XDG_RUNTIME_DIR', 'TMPDIR', 'TMP', 'TEMP'];
+    for (const env of envs) {
+        const pathVal = process.env[env];
+        if (pathVal) {
+            const fullPath = path.join(pathVal, 'discord-ipc-0');
+            if (fs.existsSync(fullPath)) return fullPath;
+        }
+    }
+    const uid = process.getuid ? process.getuid() : 1000;
+    const linuxFallback = `/run/user/${uid}/discord-ipc-0`;
+    if (fs.existsSync(linuxFallback)) return linuxFallback;
+    const tmpFallback = '/tmp/discord-ipc-0';
+    if (fs.existsSync(tmpFallback)) return tmpFallback;
+    return null;
+};
+
+function pack(op, data) {
+    const payload = JSON.stringify(data);
+    const byteLength = Buffer.byteLength(payload);
+    const buf = Buffer.alloc(8 + byteLength);
+    buf.writeInt32LE(op, 0);
+    buf.writeInt32LE(byteLength, 4);
+    buf.write(payload, 8, byteLength, 'utf8');
+    return buf;
+}
+
+function connectDiscordRPC() {
+    const net = require('net');
+    const ipcPath = getIpcPath();
+    if (!ipcPath) {
+        console.log("[Discord RPC] IPC socket not found. Make sure Discord is running.");
+        return;
+    }
+    
+    console.log("[Discord RPC] Connecting via:", ipcPath);
+    rpcSocket = net.createConnection(ipcPath);
+    
+    rpcSocket.on('connect', () => {
+        console.log("[Discord RPC] Connected successfully!");
+        // Handshake
+        rpcSocket.write(pack(0, { v: 1, client_id: DISCORD_CLIENT_ID }));
+    });
+    
+    rpcSocket.on('data', (data) => {
+        // Handshake response or activity set acknowledgment (safe to ignore)
+    });
+    
+    rpcSocket.on('error', (err) => {
+        console.log("[Discord RPC] Connection error:", err.message);
+        rpcSocket = null;
+    });
+    
+    rpcSocket.on('close', () => {
+        console.log("[Discord RPC] Connection closed. Will retry in 20s...");
+        rpcSocket = null;
+        setTimeout(connectDiscordRPC, 20000); // retry
+    });
+}
+
+function updateDiscordActivity(title, artist, isPlaying, duration, currentTime) {
+    if (!rpcSocket) return;
+    
+    const activity = {
+        details: title ? title.slice(0, 127) : 'Слухає музику',
+        state: artist ? artist.slice(0, 127) : 'VibeTube Плеєр',
+        assets: {
+            large_image: 'vibetube_logo',
+            large_text: 'VibeTube',
+            small_image: isPlaying ? 'play_icon' : 'pause_icon',
+            small_text: isPlaying ? 'Відтворення' : 'Пауза'
+        }
+    };
+    
+    if (isPlaying) {
+        const start = Date.now();
+        activity.timestamps = {
+            start: start
+        };
+        
+        if (duration && currentTime !== undefined) {
+            const remaining = duration - currentTime;
+            if (remaining > 0) {
+                activity.timestamps.end = Math.round(start + remaining * 1000);
+            }
+        }
+    }
+    
+    const packet = {
+        cmd: 'SET_ACTIVITY',
+        args: {
+            pid: process.pid,
+            activity: activity
+        },
+        nonce: Math.random().toString()
+    };
+    
+    try {
+        rpcSocket.write(pack(1, packet));
+    } catch (e) {
+        console.error("[Discord RPC] Failed to write activity payload:", e);
+    }
+}
+
+ipcMain.on('track-changed', (event, data) => {
+    updateDiscordActivity(data.title, data.artist, data.isPlaying, data.duration, data.currentTime);
+});
+
 function startPythonServer() {
     console.log("Starting Python backend server...");
     pyServer = spawn('python3', [path.join(__dirname, 'youtube_player_server.py')]);
@@ -92,6 +208,7 @@ function createWindow() {
         height: 850,
         title: "VibeTube — YouTube Плеєр з Еквалайзером",
         frame: false,
+        icon: path.join(__dirname, 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -111,21 +228,133 @@ function createWindow() {
         mainWindow.show();
     });
 
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.log(`[Renderer Console] ${message} (at ${path.basename(sourceId)}:${line})`);
+    });
+
+    mainWindow.on('close', (event) => {
+        if (!isQuitting) {
+            event.preventDefault();
+            mainWindow.hide();
+        }
+    });
+
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
+}
+
+function createTray() {
+    tray = new Tray(path.join(__dirname, 'icon.png'));
+    tray.setToolTip('VibeTube');
+    
+    const trayMenu = Menu.buildFromTemplate([
+        { label: 'VibeTube Плеєр', enabled: false },
+        { type: 'separator' },
+        { label: 'Відтворити / Пауза', click: () => {
+            if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'play-pause');
+        }},
+        { label: 'Наступний трек', click: () => {
+            if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'next');
+        }},
+        { label: 'Попередній трек', click: () => {
+            if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'prev');
+        }},
+        { type: 'separator' },
+        { label: 'Показати вікно', click: () => {
+            if (mainWindow) {
+                mainWindow.show();
+                mainWindow.focus();
+            }
+        }},
+        { label: 'Вихід', click: () => {
+            isQuitting = true;
+            app.quit();
+        }}
+    ]);
+    
+    tray.setContextMenu(trayMenu);
+    
+    tray.on('double-click', () => {
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
+
+function setupAutostart() {
+    if (process.platform === 'linux') {
+        const fs = require('fs');
+        const os = require('os');
+        const autostartDir = path.join(os.homedir(), '.config', 'autostart');
+        const desktopFilePath = path.join(autostartDir, 'vibetube.desktop');
+        
+        try {
+            if (!fs.existsSync(autostartDir)) {
+                fs.mkdirSync(autostartDir, { recursive: true });
+            }
+            
+            const projectDir = __dirname;
+            const desktopContent = `[Desktop Entry]
+Type=Application
+Version=1.0
+Name=VibeTube
+Comment=Spotify-Style YouTube & SoundCloud Player
+Exec=/usr/bin/npm start --prefix ${projectDir}
+Icon=${path.join(projectDir, 'icon.png')}
+Terminal=false
+StartupNotify=false
+Categories=Audio;Music;Player;AudioVideo;
+X-GNOME-Autostart-enabled=true
+`;
+            fs.writeFileSync(desktopFilePath, desktopContent, 'utf8');
+            console.log("[Autostart] Linux .desktop file created/updated at:", desktopFilePath);
+        } catch (e) {
+            console.error("[Autostart] Failed to setup Linux autostart:", e);
+        }
+    } else {
+        try {
+            app.setLoginItemSettings({
+                openAtLogin: true,
+                path: process.execPath,
+                args: [__dirname]
+            });
+            console.log("[Autostart] Windows/macOS login settings updated.");
+        } catch (e) {
+            console.error("[Autostart] Failed to setup Windows/macOS autostart:", e);
+        }
+    }
 }
 
 app.whenReady().then(() => {
     // Set App User Model ID for Windows notifications grouping
     app.setAppUserModelId('org.vibetube.player');
     
+    setupAutostart();
     startPythonServer();
     createWindow();
+    createTray();
+    connectDiscordRPC();
+
+    // Register global media shortcuts
+    globalShortcut.register('MediaPlayPause', () => {
+        if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'play-pause');
+    });
+    globalShortcut.register('MediaNextTrack', () => {
+        if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'next');
+    });
+    globalShortcut.register('MediaPreviousTrack', () => {
+        if (mainWindow) mainWindow.webContents.send('global-shortcut-media', 'prev');
+    });
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+});
+
+app.on('before-quit', () => {
+    isQuitting = true;
 });
 
 app.on('window-all-closed', () => {
@@ -140,6 +369,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    if (rpcSocket) {
+        try {
+            rpcSocket.destroy();
+        } catch (e) {}
+    }
     if (pyServer) {
         pyServer.kill();
     }

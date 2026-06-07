@@ -24,6 +24,109 @@ import time
 stream_url_cache = {}
 stream_cache_lock = threading.Lock()
 
+# Auto-detect cookies browser on startup
+DETECTED_COOKIES_BROWSER = None
+def get_cookies_browser():
+    global DETECTED_COOKIES_BROWSER
+    if DETECTED_COOKIES_BROWSER is not None:
+        return DETECTED_COOKIES_BROWSER
+
+    import glob
+    browser_list = ['firefox', 'chrome', 'brave', 'chromium', 'opera', 'edge']
+    home = os.path.expanduser('~')
+    
+    if sys.platform == 'win32':
+        local_appdata = os.environ.get('LOCALAPPDATA', '')
+        appdata = os.environ.get('APPDATA', '')
+        check_paths = {
+            'firefox': [os.path.join(appdata, 'Mozilla', 'Firefox', 'Profiles', '*', 'cookies.sqlite')],
+            'chrome': [
+                os.path.join(local_appdata, 'Google', 'Chrome', 'User Data', '*', 'Cookies'),
+                os.path.join(local_appdata, 'Google', 'Chrome', 'User Data', 'Default', 'Cookies')
+            ],
+            'brave': [
+                os.path.join(local_appdata, 'BraveSoftware', 'Brave-Browser', 'User Data', '*', 'Cookies'),
+                os.path.join(local_appdata, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Cookies')
+            ],
+            'chromium': [
+                os.path.join(local_appdata, 'Chromium', 'User Data', '*', 'Cookies'),
+                os.path.join(local_appdata, 'Chromium', 'User Data', 'Default', 'Cookies')
+            ],
+            'opera': [os.path.join(appdata, 'Opera Software', 'Opera Stable', 'Cookies')],
+            'edge': [
+                os.path.join(local_appdata, 'Microsoft', 'Edge', 'User Data', '*', 'Cookies'),
+                os.path.join(local_appdata, 'Microsoft', 'Edge', 'User Data', 'Default', 'Cookies')
+            ]
+        }
+    else:
+        check_paths = {
+            'firefox': [
+                os.path.join(home, '.config', 'mozilla', 'firefox', '*', 'cookies.sqlite'),
+                os.path.join(home, '.mozilla', 'firefox', '*', 'cookies.sqlite'),
+                os.path.join(home, 'Library', 'Application Support', 'Firefox', 'Profiles', '*', 'cookies.sqlite')
+            ],
+            'chrome': [
+                os.path.join(home, '.config', 'google-chrome', '*', 'Cookies'),
+                os.path.join(home, '.config', 'google-chrome', 'Default', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'Google', 'Chrome', '*', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Cookies')
+            ],
+            'brave': [
+                os.path.join(home, '.config', 'BraveSoftware', 'Brave-Browser', '*', 'Cookies'),
+                os.path.join(home, '.config', 'BraveSoftware', 'Brave-Browser', 'Default', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser', '*', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser', 'Default', 'Cookies')
+            ],
+            'chromium': [
+                os.path.join(home, '.config', 'chromium', '*', 'Cookies'),
+                os.path.join(home, '.config', 'chromium', 'Default', 'Cookies')
+            ],
+            'opera': [
+                os.path.join(home, '.config', 'opera', 'Cookies'),
+                os.path.join(home, '.config', 'opera', '*', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'Com.operasoftware.Opera', 'Cookies')
+            ],
+            'edge': [
+                os.path.join(home, '.config', 'microsoft-edge', '*', 'Cookies'),
+                os.path.join(home, '.config', 'microsoft-edge', 'Default', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'Microsoft Edge', '*', 'Cookies'),
+                os.path.join(home, 'Library', 'Application Support', 'Microsoft Edge', 'Default', 'Cookies')
+            ]
+        }
+        
+    best_browser = 'firefox'
+    latest_time = 0
+    for browser, paths in check_paths.items():
+        for path in paths:
+            for filepath in glob.glob(path):
+                if os.path.exists(filepath):
+                    try:
+                        mtime = os.path.getmtime(filepath)
+                        if mtime > latest_time:
+                            latest_time = mtime
+                            best_browser = browser
+                    except Exception:
+                        pass
+    DETECTED_COOKIES_BROWSER = best_browser
+    print(f"[Cookies Detector] Selected cookies browser: {DETECTED_COOKIES_BROWSER}")
+    return DETECTED_COOKIES_BROWSER
+
+def check_update_ytdl():
+    def bg_update():
+        try:
+            print("[Updater] Checking for yt-dlp updates...")
+            process = subprocess.run(['yt-dlp', '-U'], capture_output=True, text=True, timeout=30)
+            if process.returncode == 0:
+                print(f"[Updater] yt-dlp check finished: {process.stdout.strip()}")
+            else:
+                print(f"[Updater] yt-dlp check failed: {process.stderr.strip()}")
+        except Exception as e:
+            print(f"[Updater] Error checking for yt-dlp updates: {e}")
+            
+    threading.Thread(target=bg_update, daemon=True).start()
+
+
+
 mpris_state = {
     'playback_status': 'Stopped',
     'title': '',
@@ -190,6 +293,66 @@ def init_mpris():
     except Exception as e:
         print("Failed to initialize MPRIS:", e)
 
+# Audio caching system
+CACHE_DIR = os.path.join(DIRECTORY, '.cache')
+downloading_set = set()
+downloading_lock = threading.Lock()
+
+def get_cached_filepath_static(video_id):
+    cache_dir = os.path.join(DIRECTORY, '.cache')
+    if not os.path.exists(cache_dir):
+        return None
+    for ext in ['webm', 'm4a', 'mp3', 'ogg', 'wav']:
+        p = os.path.join(cache_dir, f"{video_id}.{ext}")
+        if os.path.exists(p) and not os.path.exists(p + ".part") and not os.path.exists(p + ".ytdl"):
+            return p
+    return None
+
+def start_background_download(video_id):
+    if not video_id:
+        return
+    if video_id.startswith('http://') or video_id.startswith('https://') or '/' in video_id:
+        return
+        
+    with downloading_lock:
+        if video_id in downloading_set:
+            return
+        if get_cached_filepath_static(video_id):
+            return
+        downloading_set.add(video_id)
+        
+    def bg_download():
+        try:
+            cache_dir = os.path.join(DIRECTORY, '.cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            cmd = [
+                'yt-dlp', 
+                '--remote-components', 'ejs:github',
+                '--js-runtimes', 'node',
+                '--cookies-from-browser', get_cookies_browser(), 
+                '--ignore-config',
+                '-f', 'ba',
+                '-o', os.path.join(cache_dir, f"{video_id}.%(ext)s"),
+                url
+            ]
+            print(f"[Cache] Starting background download for {video_id}...")
+            process = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+            if process.returncode == 0:
+                print(f"[Cache] Successfully cached track {video_id}")
+            else:
+                print(f"[Cache] Failed to cache track {video_id}: {process.stderr}")
+        except Exception as e:
+            print(f"[Cache] Error caching track {video_id}: {e}")
+        finally:
+            with downloading_lock:
+                if video_id in downloading_set:
+                    downloading_set.remove(video_id)
+                    
+    threading.Thread(target=bg_download, daemon=True).start()
+
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
@@ -204,6 +367,52 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
+
+    def serve_local_file(self, filepath):
+        import mimetypes
+        file_size = os.path.getsize(filepath)
+        mime_type, _ = mimetypes.guess_type(filepath)
+        if not mime_type:
+            mime_type = 'audio/mpeg' if filepath.endswith('.mp3') else 'audio/webm'
+            
+        range_header = self.headers.get('Range')
+        
+        start = 0
+        end = file_size - 1
+        
+        if range_header:
+            range_str = range_header.replace('bytes=', '')
+            parts = range_str.split('-')
+            if parts[0]:
+                start = int(parts[0])
+            if len(parts) > 1 and parts[1]:
+                end = int(parts[1])
+                
+        start = max(0, min(start, file_size - 1))
+        end = max(start, min(end, file_size - 1))
+        content_length = end - start + 1
+        
+        try:
+            self.send_response(206 if range_header else 200)
+            self.send_header('Content-Type', mime_type)
+            self.send_header('Content-Length', str(content_length))
+            self.send_header('Accept-Ranges', 'bytes')
+            if range_header:
+                self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
+            self.end_headers()
+            
+            with open(filepath, 'rb') as f:
+                f.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    chunk_size = min(remaining, 65536)
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except Exception as e:
+            print(f"Error serving local file {filepath}: {e}")
 
     def do_GET(self):
         parsed_path = urllib.parse.urlparse(self.path)
@@ -299,7 +508,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
             else:
                 search_target = f'ytsearch6:{q}'
                 
-            cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', 'firefox', '--ignore-config', '--flat-playlist', '--dump-json', search_target]
+            cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', get_cookies_browser(), '--ignore-config', '--flat-playlist', '--dump-json', search_target]
             process = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
             
             results = self.parse_json_lines(process.stdout)
@@ -333,7 +542,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
                 'yt-dlp', 
                 '--remote-components', 'ejs:github',
                 '--js-runtimes', 'node',
-                '--cookies-from-browser', 'firefox', 
+                '--cookies-from-browser', get_cookies_browser(), 
                 '--ignore-config',
                 '--playlist-end', '100', 
                 '--flat-playlist', 
@@ -353,7 +562,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
                 'yt-dlp', 
                 '--remote-components', 'ejs:github',
                 '--js-runtimes', 'node',
-                '--cookies-from-browser', 'firefox', 
+                '--cookies-from-browser', get_cookies_browser(), 
                 '--ignore-config',
                 '--flat-playlist', 
                 '--dump-json', 
@@ -374,6 +583,16 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Missing video ID")
             return
 
+        # Check disk cache
+        cached_path = get_cached_filepath_static(video_id)
+        if cached_path:
+            print(f"[Cache] Serving cached file for {video_id}")
+            self.serve_local_file(cached_path)
+            return
+
+        # Start downloading in background for future cache
+        start_background_download(video_id)
+
         stream_url = None
         # Check cache
         with stream_cache_lock:
@@ -392,7 +611,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
                     url_or_id = f"https://www.youtube.com/watch?v={video_id}"
 
                 # Use cookies-from-browser to allow streaming of age-restricted or private tracks
-                cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', 'firefox', '--no-playlist', '--ignore-config', '-f', 'ba', '-g', url_or_id]
+                cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', get_cookies_browser(), '--no-playlist', '--ignore-config', '-f', 'ba', '-g', url_or_id]
                 process = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
                 
                 if process.returncode != 0:
@@ -466,6 +685,14 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Missing video ID")
             return
 
+        # Check disk cache
+        if get_cached_filepath_static(video_id):
+            self.send_json({"status": "cached_on_disk"})
+            return
+
+        # Start background download to cache disk
+        start_background_download(video_id)
+
         # Check if already cached
         with stream_cache_lock:
             if video_id in stream_url_cache:
@@ -481,7 +708,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
                 if not (vid.startswith('http://') or vid.startswith('https://')):
                     url_or_id = f"https://www.youtube.com/watch?v={vid}"
 
-                cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', 'firefox', '--no-playlist', '--ignore-config', '-f', 'ba', '-g', url_or_id]
+                cmd = ['yt-dlp', '--remote-components', 'ejs:github', '--js-runtimes', 'node', '--cookies-from-browser', get_cookies_browser(), '--no-playlist', '--ignore-config', '-f', 'ba', '-g', url_or_id]
                 process = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
                 if process.returncode == 0:
                     url = process.stdout.strip()
@@ -723,6 +950,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
         self.send_json({"lyrics": "Текст пісні не знайдено.", "syncedLyrics": None})
 
 def main():
+    check_update_ytdl()
     init_mpris()
     server_address = ('', PORT)
     httpd = ThreadingHTTPServer(server_address, YTPlayerHandler)
