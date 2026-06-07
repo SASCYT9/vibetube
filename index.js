@@ -828,6 +828,7 @@ function renderResultsList() {
     currentPlaylist.forEach((track, index) => {
         const item = document.createElement('div');
         item.className = 'track-item';
+        item.style.animationDelay = `${index * 0.02}s`;
         if (index === currentIndex && currentPlaylist === activePlaylistReference()) {
             item.classList.add('playing');
         }
@@ -864,6 +865,7 @@ function renderHistoryList() {
     historyPlaylist.forEach((track, index) => {
         const item = document.createElement('div');
         item.className = 'track-item';
+        item.style.animationDelay = `${index * 0.02}s`;
         
         item.innerHTML = `
             <div class="track-item-thumb" style="background-image: url('${track.thumbnail}')">
@@ -1006,9 +1008,10 @@ function renderUserPlaylistsGrid(playlists) {
         return;
     }
     
-    filteredPlaylists.forEach(playlist => {
+    filteredPlaylists.forEach((playlist, index) => {
         const item = document.createElement('div');
         item.className = 'playlist-card-item';
+        item.style.animationDelay = `${index * 0.03}s`;
         
         const thumbUrl = playlist.thumbnail;
         const imgStyle = thumbUrl ? `background-image: url('${thumbUrl}')` : '';
@@ -1088,6 +1091,7 @@ function renderAccountList(type) {
     accountPlaylist.forEach((track, index) => {
         const item = document.createElement('div');
         item.className = 'track-item';
+        item.style.animationDelay = `${index * 0.02}s`;
         if (index === currentIndex && accountPlaylist === activePlaylistReference()) {
             item.classList.add('playing');
         }

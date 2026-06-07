@@ -175,7 +175,7 @@ def init_mpris():
     try:
         bus = SessionBus()
         mpris_obj = VibeTubeMPRIS(mpris_state)
-        bus.publish("org.mpris.MediaPlayer2.vibetube", mpris_obj)
+        bus.publish("org.mpris.MediaPlayer2.vibetube", ("/org/mpris/MediaPlayer2", mpris_obj))
         
         # Start GLib main loop in background thread
         loop = GLib.MainLoop()
