@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeTube — YouTube Плеєр з Еквалайзером</title>
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="bg-glow"></div>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-brands fa-youtube logo-icon"></i>
+                <h1>VIBE<span>TUBE</span></h1>
+            </div>
+            
+            <div class="search-container">
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="search-input" placeholder="Введіть назву пісні, виконавця або лінк..." autocomplete="off">
+                    <i class="fa-solid fa-xmark search-clear-icon" id="search-clear-btn" style="display: none; cursor: pointer; color: var(--text-muted); margin-right: 12px; font-size: 1.1rem; transition: color 0.2s;"></i>
+                    <button id="search-btn">Пошук</button>
+                    <div class="search-suggestions" id="search-suggestions" style="display: none;"></div>
+                </div>
+                <div class="search-tags" id="search-tags">
+                    <button class="search-tag-btn" data-tag="Lofi Beats">Lofi</button>
+                    <button class="search-tag-btn" data-tag="Synthwave Retrowave">Synthwave</button>
+                    <button class="search-tag-btn" data-tag="Bass Boosted Songs">Bass Boosted</button>
+                    <button class="search-tag-btn" data-tag="Club Electro Remix">Electro</button>
+                    <button class="search-tag-btn" data-tag="Acoustic Cover">Acoustic</button>
+                    <button class="search-tag-btn" data-tag="Relaxing Ambient Music">Ambient</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <main class="main-grid">
+            <!-- Left Panel: Player Card -->
+            <section class="player-panel">
+                <div class="card glass">
+                    <!-- Album art area -->
+                    <div class="track-artwork-container">
+                        <div class="artwork-pulse" id="artwork-pulse"></div>
+                        <div class="track-artwork" id="track-artwork" style="background-image: url('https://images.unsplash.com/photo-1614149162883-504ce4d13909?q=80&w=500&auto=format&fit=crop');">
+                            <div class="vinyl-center"></div>
+                        </div>
+                    </div>
+
+                    <!-- Track info -->
+                    <div class="track-info">
+                        <div class="track-title-wrapper">
+                            <h2 id="track-title" class="marquee">Вітаємо у VibeTube</h2>
+                            <button id="like-btn" class="like-btn" title="Додати до улюблених">
+                                <i class="fa-regular fa-heart"></i>
+                            </button>
+                        </div>
+                        <p id="track-channel">Знайдіть трек, щоб розпочати відтворення</p>
+                    </div>
+
+                    <!-- Visualizer Canvas and Video -->
+                    <div class="visualizer-container">
+                        <video id="visualizer-video" loop muted playsinline style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; pointer-events: none; position: absolute; top: 0; left: 0; z-index: 1; transition: transform 0.1s ease, filter 0.1s ease;"></video>
+                        <canvas id="visualizer-canvas" style="position: relative; z-index: 2; display: block;"></canvas>
+                    </div>
+
+                    <!-- Scrubber / Timeline -->
+                    <div class="timeline-container">
+                        <span class="time-label" id="current-time">0:00</span>
+                        <div class="progress-bar-container" id="progress-container">
+                            <div class="progress-bar-fill" id="progress-fill"></div>
+                            <div class="progress-handle" id="progress-handle"></div>
+                        </div>
+                        <span class="time-label" id="total-time">0:00</span>
+                    </div>
+
+                    <!-- Player Controls -->
+                    <div class="controls-container">
+                        <button class="ctrl-btn extra-btn" id="shuffle-btn" title="Перемішати чергу">
+                            <i class="fa-solid fa-shuffle"></i>
+                        </button>
+                        <button class="ctrl-btn secondary" id="prev-btn" title="Попередній трек">
+                            <i class="fa-solid fa-backward-step"></i>
+                        </button>
+                        <button class="ctrl-btn play-btn" id="play-btn" title="Грати / Пауза">
+                            <i class="fa-solid fa-play" id="play-icon"></i>
+                        </button>
+                        <button class="ctrl-btn secondary" id="next-btn" title="Наступний трек">
+                            <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                        <button class="ctrl-btn extra-btn" id="repeat-btn" title="Повторювати (Вимкнено)">
+                            <i class="fa-solid fa-repeat"></i>
+                        </button>
+                    </div>
+
+                    <!-- Volume and Visualizer Mode -->
+                    <div class="volume-and-mode">
+                        <div class="volume-container">
+                            <button id="mute-btn" class="mute-btn" title="Вимкнути звук">
+                                <i class="fa-solid fa-volume-high" id="volume-icon"></i>
+                            </button>
+                            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7">
+                            <span id="volume-text">70%</span>
+                        </div>
+                        <div class="mode-container" style="display: flex; gap: 8px;">
+                            <button id="visualizer-mode-btn" class="mode-btn" title="Змінити режим візуалізації">
+                                <i class="fa-solid fa-chart-simple"></i> Режим: Смуги & Хвиля
+                            </button>
+                            <button id="eq-toggle-btn" class="mode-btn" title="Графічний Еквалайзер">
+                                <i class="fa-solid fa-sliders"></i> Еквалайзер
+                            </button>
+                            <button id="fullscreen-btn" class="mode-btn" title="Повний екран ілюмінацій">
+                                <i class="fa-solid fa-expand"></i> Повний екран
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Playlist & Queue only (EQ is in modal now) -->
+            <section class="settings-panel">
+                <!-- Playlist & Queue Panel -->
+                <div class="card glass list-card">
+                    <!-- Tabs -->
+                    <div class="tabs-header">
+                        <button class="tab-btn active" id="tab-account"><i class="fa-solid fa-music"></i> Плейлисти</button>
+                        <button class="tab-btn" id="tab-results"><i class="fa-solid fa-magnifying-glass"></i> Пошук</button>
+                        <button class="tab-btn" id="tab-history"><i class="fa-solid fa-history"></i> Нещодавні</button>
+                        <button class="tab-btn" id="tab-lyrics"><i class="fa-solid fa-microphone-lines"></i> Текст</button>
+                    </div>
+
+                    <!-- Results List Content -->
+                    <div class="tab-content" id="results-content">
+                        <div class="empty-state" id="results-empty">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <p>Введіть запит для пошуку треків у YouTube</p>
+                        </div>
+                        <div class="results-list" id="results-list"></div>
+                    </div>
+
+                    <!-- History List Content -->
+                    <div class="tab-content" id="history-content">
+                        <div class="history-sync-wrapper" style="padding: 0.75rem; display: flex; justify-content: center; border-bottom: 1px solid var(--border-color);">
+                            <button class="mode-btn" id="load-yt-history-btn" style="width: 100%; max-width: 250px; font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                <i class="fa-brands fa-youtube" style="color: #ef4444;"></i> Синхронізувати з YouTube
+                            </button>
+                        </div>
+                        <div class="empty-state" id="history-empty">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <p>Тут з'являться ваші нещодавні треки або історія з YouTube</p>
+                        </div>
+                        <div class="results-list" id="history-list"></div>
+                    </div>
+
+                    <!-- My YouTube Account Content -->
+                    <div class="tab-content active" id="account-content">
+                        <!-- Navigation header when inside a playlist -->
+                        <div class="playlist-nav-header" id="playlist-nav-header" style="display: none; padding: 0.75rem; border-bottom: 1px solid var(--border-color); align-items: center; gap: 8px;">
+                            <button id="account-back-btn" class="mode-btn" style="padding: 0.4rem 0.9rem; font-size: 0.85rem;"><i class="fa-solid fa-arrow-left"></i> Назад до списку</button>
+                            <span id="active-playlist-name" style="font-size: 0.95rem; font-weight: bold; color: var(--neon-cyan); margin-left: 0.5rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Назва плейлиста</span>
+                        </div>
+
+                        <!-- Main Playlists Selection view -->
+                        <div id="playlists-selection-view">
+                            <div class="custom-playlist-loader" style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; gap: 8px;">
+                                <input type="text" id="custom-playlist-input" placeholder="Вставте лінк на ваш плейлист або мікс..." style="flex: 1; padding: 0.5rem 1rem; border-radius: 50px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: #fff; outline: none; font-size: 0.9rem;">
+                                <button id="load-custom-playlist-btn" class="mode-btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; white-space: nowrap;">Завантажити</button>
+                            </div>
+                            <div class="account-actions" style="margin-top: 0.75rem;">
+                                <button class="account-btn" data-type="liked"><i class="fa-solid fa-heart text-red"></i> Улюблене</button>
+                                <button class="account-btn" data-type="later"><i class="fa-solid fa-clock text-blue"></i> Черга</button>
+                                <button class="account-btn" data-type="history"><i class="fa-solid fa-history text-purple"></i> Історія</button>
+                            </div>
+                            <div class="playlists-list-header" style="padding: 1rem 1rem 0.25rem 1rem; font-size: 0.85rem; font-weight: 800; color: var(--text-main); font-family: 'Orbitron', sans-serif;">
+                                <i class="fa-solid fa-folder-tree text-purple" style="margin-right: 0.35rem;"></i> МОЇ ПЛЕЙЛИСТИ
+                            </div>
+                            <div class="playlists-grid" id="playlists-grid">
+                                <!-- User playlists will be loaded here dynamically -->
+                                <div class="spinner-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; color: var(--text-muted);">
+                                    <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.5rem; color: var(--neon-purple);"></i>
+                                    <p style="margin-top: 10px; font-size: 0.85rem;">Отримання списку плейлистів з Firefox...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Playlist Tracks List view -->
+                        <div class="results-list" id="account-list" style="display: none;"></div>
+                        
+                        <div class="empty-state" id="account-empty">
+                            <i class="fa-solid fa-user-lock"></i>
+                            <p>Оберіть розділ або зачекайте завантаження ваших плейлистів з Firefox</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Lyrics Content -->
+                    <div class="tab-content" id="lyrics-content">
+                        <div class="lyrics-container" id="lyrics-text">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-microphone-lines"></i>
+                                <p>Увімкніть трек, щоб побачити текст пісні</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Hidden HTML5 Audio element -->
+    <audio id="audio-player" crossorigin="anonymous"></audio>
+
+    <!-- Equalizer Modal Overlay -->
+    <div class="eq-modal-overlay" id="eq-modal-overlay">
+        <div class="eq-modal card glass">
+            <div class="card-header" style="margin-bottom: 1.5rem;">
+                <h3><i class="fa-solid fa-sliders"></i> Графічний Еквалайзер</h3>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="badge" id="eq-status">АКТИВНИЙ</span>
+                    <button class="eq-modal-close-btn" id="eq-modal-close-btn" title="Закрити еквалайзер">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Presets Selector -->
+            <div class="presets-container">
+                <button class="preset-btn active" data-preset="flat">Flat</button>
+                <button class="preset-btn" data-preset="bass">Bass Boost</button>
+                <button class="preset-btn" data-preset="vocal">Vocal Boost</button>
+                <button class="preset-btn" data-preset="pop">Pop</button>
+                <button class="preset-btn" data-preset="rock">Rock</button>
+                <button class="preset-btn" data-preset="jazz">Jazz</button>
+                <button class="preset-btn" data-preset="electronic">Electronic</button>
+            </div>
+
+            <!-- Equalizer Sliders -->
+            <div class="eq-sliders-wrapper">
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-60hz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="0" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">60 Гц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-150hz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="1" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">150 Гц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-400hz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="2" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">400 Гц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-1khz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="3" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">1 кГц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-3khz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="4" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">3 кГц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-8khz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="5" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">8 кГц</div>
+                </div>
+                <div class="eq-slider-col">
+                    <div class="eq-value" id="val-15khz">0dB</div>
+                    <div class="slider-track-custom">
+                        <input type="range" class="eq-slider" data-band="6" min="-12" max="12" step="0.5" value="0" orient="vertical">
+                    </div>
+                    <div class="eq-freq">15 кГц</div>
+                </div>
+            </div>
+
+            <!-- Equalizer Divider -->
+            <div class="eq-divider"></div>
+
+            <!-- Audio Effects Section -->
+            <div class="effects-section">
+                <h4><i class="fa-solid fa-wand-magic-sparkles"></i> Ефекти та Модифікатори</h4>
+                <div class="effects-grid">
+                    <!-- Bass Boost -->
+                    <div class="effect-col">
+                        <span class="effect-title"><i class="fa-solid fa-drum"></i> Bass Boost</span>
+                        <div class="effect-control">
+                            <button id="bass-boost-btn" class="preset-btn toggle-btn" title="Увімкнути Bass Boost">ВИМК</button>
+                            <input type="range" id="bass-boost-slider" min="0" max="15" step="1" value="8" disabled>
+                            <span class="value-label" id="bass-boost-val">+8dB</span>
+                        </div>
+                    </div>
+
+                    <!-- Reverb -->
+                    <div class="effect-col">
+                        <span class="effect-title"><i class="fa-solid fa-mountain"></i> Реверберація</span>
+                        <div class="effect-control">
+                            <button id="reverb-btn" class="preset-btn toggle-btn" title="Увімкнути Реверберацію">ВИМК</button>
+                            <input type="range" id="reverb-slider" min="0" max="1" step="0.05" value="0.45" disabled>
+                            <span class="value-label" id="reverb-val">45%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Speed & Pitch Row -->
+                <div class="speed-row">
+                    <div class="speed-slider-container">
+                        <span class="effect-title"><i class="fa-solid fa-gauge-high"></i> Швидкість: <span id="speed-val">1.0x</span></span>
+                        <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.05" value="1.0" class="speed-slider">
+                    </div>
+                    <div class="preserve-pitch-container">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="preserve-pitch-checkbox" checked>
+                            <span class="checkmark"></span>
+                            Зберігати висоту
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Quick FX Presets -->
+                <div class="fx-presets-container">
+                    <button class="preset-btn fx-btn" id="fx-normal-btn">Нормальний</button>
+                    <button class="preset-btn fx-btn" id="fx-nightcore-btn"><i class="fa-solid fa-bolt text-yellow"></i> Nightcore</button>
+                    <button class="preset-btn fx-btn" id="fx-slowed-btn"><i class="fa-solid fa-snowflake text-blue"></i> Slowed & Reverb</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Script -->
+    <script src="index.js"></script>
+</body>
+</html>

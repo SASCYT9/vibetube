@@ -1,0 +1,25 @@
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Local caches
+.cache/
+__pycache__/
+*.pyc
+
+# Local log files
+*.log
+logs/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Media cache
+visualizations/wmp_goodies_plugins/
+*.mp4
+*.jpg
+*.png
+!wmp_reference.jpg
+!screenshot.png
+!requested_image.jpg
