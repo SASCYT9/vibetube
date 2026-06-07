@@ -262,6 +262,7 @@ body {
     width: 260px;
     height: 260px;
     margin: 0.5rem auto 1.5rem;
+    flex-shrink: 0;
 }
 
 .track-artwork {
@@ -274,6 +275,7 @@ body {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(29, 185, 84, 0.15);
     position: relative;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    flex-shrink: 0;
 }
 
 .track-artwork.playing {
@@ -953,6 +955,7 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     flex-direction: column;
     flex: 1;
     min-height: 550px;
+    padding: 1.25rem !important;
 }
 
 .tabs-header {
@@ -1150,9 +1153,9 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
 
 /* Account Integration Styles */
 .account-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
     margin-bottom: 1.25rem;
 }
 
@@ -1160,17 +1163,18 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
     color: var(--text-main);
-    padding: 0.65rem 0.5rem;
+    padding: 0.75rem 1rem;
     border-radius: 12px;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    width: 100%;
 }
 
 .account-btn:hover {
@@ -1358,6 +1362,7 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     align-items: center;
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .playlist-play-hover {
@@ -1627,10 +1632,7 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     transform: scale(1.03);
 }
 
-.account-actions {
-    gap: 1rem !important;
-    margin-bottom: 1.5rem !important;
-}
+/* account-actions override removed to support column layout */
 
 /* Fullscreen Media Overlay (Spotify TV Style) */
 .fullscreen-overlay {
