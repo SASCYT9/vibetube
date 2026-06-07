@@ -182,8 +182,17 @@ body {
 /* Grid layout */
 .main-grid {
     display: grid;
-    grid-template-columns: 450px 1fr;
+    grid-template-columns: 350px 1fr;
     gap: 2rem;
+}
+
+@media (min-width: 1025px) {
+    .settings-panel {
+        order: 1;
+    }
+    .player-panel {
+        order: 2;
+    }
 }
 
 @media (max-width: 1024px) {
@@ -366,7 +375,7 @@ body {
 .progress-bar-container {
     flex: 1;
     height: 6px;
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     position: relative;
     cursor: pointer;
@@ -374,17 +383,22 @@ body {
 }
 
 .progress-bar-container:hover {
-    height: 8px;
+    height: 6px;
 }
 
 .progress-bar-fill {
     height: 100%;
-    background: linear-gradient(to right, var(--neon-purple), var(--neon-cyan));
+    background: #ffffff;
     border-radius: 10px;
     width: 0%;
     position: absolute;
     top: 0;
     left: 0;
+    transition: background-color 0.15s ease;
+}
+
+.progress-bar-container:hover .progress-bar-fill {
+    background: var(--primary-glow);
 }
 
 .progress-handle {
@@ -392,11 +406,11 @@ body {
     top: 50%;
     left: 0%;
     transform: translate(-50%, -50%) scale(0);
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: white;
-    box-shadow: 0 0 10px var(--neon-cyan);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     transition: transform 0.1s ease;
     pointer-events: none;
 }
@@ -417,7 +431,7 @@ body {
 .ctrl-btn {
     background: transparent;
     border: none;
-    color: var(--text-main);
+    color: var(--text-muted);
     font-size: 1.4rem;
     cursor: pointer;
     width: 44px;
@@ -431,9 +445,8 @@ body {
 }
 
 .ctrl-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--neon-cyan);
-    border-color: rgba(255, 255, 255, 0.05);
+    background: transparent;
+    color: var(--text-main);
 }
 
 .ctrl-btn:active {
@@ -441,18 +454,19 @@ body {
 }
 
 .ctrl-btn.play-btn {
-    background: linear-gradient(135deg, var(--neon-purple), var(--primary-glow));
+    background: var(--primary-glow);
     font-size: 1.5rem;
     width: 60px;
     height: 60px;
-    color: white;
-    box-shadow: 0 6px 20px var(--primary-glow-rgba);
+    color: #0c0c0e;
+    box-shadow: 0 6px 20px rgba(29, 185, 84, 0.3);
 }
 
 .ctrl-btn.play-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.6);
-    color: white;
+    transform: scale(1.06);
+    background: var(--secondary-glow);
+    box-shadow: 0 8px 25px rgba(30, 215, 96, 0.45);
+    color: #0c0c0e;
 }
 
 .ctrl-btn.play-btn:active {
@@ -935,43 +949,41 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
 
 .tabs-header {
     display: flex;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    margin-bottom: 1rem;
+    gap: 0.5rem;
+    border-bottom: none;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
 }
 
 .tab-btn {
-    background: transparent;
-    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.02);
     color: var(--text-muted);
     font-family: inherit;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 600;
-    padding: 0.75rem 1.25rem;
+    padding: 0.55rem 1.15rem;
+    border-radius: 50px;
     cursor: pointer;
-    position: relative;
     transition: var(--transition);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .tab-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-main);
 }
 
 .tab-btn.active {
-    color: var(--neon-cyan);
+    background: var(--primary-glow);
+    color: #0c0c0e;
+    border-color: var(--primary-glow);
 }
 
 .tab-btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--neon-cyan);
-    box-shadow: 0 0 8px var(--neon-cyan);
+    display: none;
 }
 
 .tab-content {
