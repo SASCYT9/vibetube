@@ -16,6 +16,10 @@ let previousVolume = 0.7;
 let likedTracks = [];
 let syncedLyrics = [];
 let currentLyricsIndex = -1;
+let lastFmTrack = null;
+let lastFmStartTime = 0;
+let lastFmMinPlayTime = 0;
+let lastFmScrobbled = false;
 let userPlaylistsLoaded = false;
 let userPlaylists = [];
 let recentSearches = JSON.parse(localStorage.getItem('vibetube_recent_searches') || '[]');
@@ -126,6 +130,10 @@ const eqModalOverlay = document.getElementById('eq-modal-overlay');
 const eqToggleBtn = document.getElementById('eq-toggle-btn');
 const eqModalCloseBtn = document.getElementById('eq-modal-close-btn');
 const miniPlayerBtn = document.getElementById('mini-player-btn');
+
+// Local file player DOM elements
+const localFileBtn = document.getElementById('local-file-btn');
+const localFileInput = document.getElementById('local-file-input');
 
 // Theme Settings Elements
 const themeSettingsBtn = document.getElementById('theme-settings-btn');
@@ -821,6 +829,37 @@ function setupEventListeners() {
             if (historyTracksView) historyTracksView.style.display = 'none';
             if (historyStatsView) historyStatsView.style.display = 'block';
             renderListeningStats();
+        });
+    }
+
+    // Local File Player event listeners
+    if (localFileBtn && localFileInput) {
+        localFileBtn.addEventListener('click', () => {
+            localFileInput.click();
+        });
+
+        localFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                const file = e.target.files[0];
+                const fileUrl = URL.createObjectURL(file);
+                
+                const track = {
+                    id: 'local-' + Date.now(),
+                    title: file.name.replace(/\.[^/.]+$/, ""),
+                    channel: "Локальний файл",
+                    thumbnail: "icon.png",
+                    duration: "0:00",
+                    url: fileUrl,
+                    isLocal: true
+                };
+
+                // Add to current queue and play it
+                currentPlaylist = [track];
+                playTrack(track, 0, currentPlaylist);
+                
+                // Clear input so same file can be opened again
+                localFileInput.value = '';
+            }
         });
     }
 }
@@ -1556,7 +1595,11 @@ async function playTrack(track, index, playlist) {
     totalTimeLabel.textContent = track.duration;
 
     // Load URL in audio tag
-    audio.src = `/api/stream?id=${encodeURIComponent(track.id)}`;
+    if (track.isLocal) {
+        audio.src = track.url;
+    } else {
+        audio.src = `/api/stream?id=${encodeURIComponent(track.id)}`;
+    }
     
     // Re-apply speed and pitch preservation settings
     const currentRate = parseFloat(speedSlider.value);
@@ -1567,6 +1610,18 @@ async function playTrack(track, index, playlist) {
         await audio.play();
         addToHistory(track);
         updateSystemMediaControls(track);
+        
+        // Reset Last.fm scrobble tracker and update Now Playing
+        if (typeof LastFm !== 'undefined' && LastFm.isEnabled()) {
+            LastFm.updateNowPlaying(track.channel, track.title);
+            lastFmTrack = track;
+            lastFmStartTime = Math.floor(Date.now() / 1000);
+            lastFmMinPlayTime = 0;
+            lastFmScrobbled = false;
+        } else {
+            lastFmTrack = null;
+        }
+
         // Load lyrics in the background
         fetchLyrics(track.channel, track.title);
         // Pre-resolve the next track in the playlist
@@ -1591,7 +1646,7 @@ function preResolveNextTrack(index, playlist) {
         }
     }
     const nextTrack = playlist[nextIndex];
-    if (nextTrack && nextTrack.id) {
+    if (nextTrack && nextTrack.id && !nextTrack.isLocal) {
         fetch(`/api/pre_resolve?id=${encodeURIComponent(nextTrack.id)}`).catch(err => console.error("Pre-resolve next error:", err));
     }
 }
@@ -1601,7 +1656,7 @@ function preResolveTopTracks(playlist, count = 2) {
     if (!playlist || playlist.length === 0) return;
     for (let i = 0; i < Math.min(playlist.length, count); i++) {
         const track = playlist[i];
-        if (track && track.id) {
+        if (track && track.id && !track.isLocal) {
             fetch(`/api/pre_resolve?id=${encodeURIComponent(track.id)}`).catch(err => console.error("Pre-resolve top error:", err));
         }
     }
@@ -1807,6 +1862,17 @@ function updateProgress() {
     if (window._lastSavedTime !== currentRounded) {
         window._lastSavedTime = currentRounded;
         localStorage.setItem('vibetube_last_time', current.toString());
+    }
+
+    // Last.fm Scrobble progress check
+    if (typeof LastFm !== 'undefined' && LastFm.isEnabled() && lastFmTrack && !lastFmScrobbled) {
+        if (lastFmMinPlayTime === 0 && audio.duration >= 30) {
+            lastFmMinPlayTime = Math.min(240, audio.duration / 2);
+        }
+        if (lastFmMinPlayTime > 0 && current >= lastFmMinPlayTime) {
+            lastFmScrobbled = true;
+            LastFm.scrobble(lastFmTrack.channel, lastFmTrack.title, lastFmStartTime);
+        }
     }
 
     // Update total listening time statistics
@@ -3185,7 +3251,11 @@ function restoreLastState() {
             if (songRadioBtn) songRadioBtn.style.display = 'inline-block';
             
             // Set audio source but do NOT auto-play
-            audio.src = `/api/stream?id=${encodeURIComponent(track.id)}`;
+            if (track.isLocal) {
+                trackTitle.textContent = `${track.title} (Локальний файл - відкрийте знову)`;
+            } else {
+                audio.src = `/api/stream?id=${encodeURIComponent(track.id)}`;
+            }
             
             // Re-apply speed and pitch preservation settings
             const currentRate = parseFloat(speedSlider.value);
@@ -3518,6 +3588,9 @@ function initThemeSettings() {
             }
         });
     }
+    
+    // Initialize Integrations (Autostart, Last.fm)
+    initSettingsIntegrations();
 }
 
 function updateTrackPlayStats(track) {
@@ -3618,4 +3691,288 @@ function renderListeningStats() {
             </div>
         </div>
     `;
+}
+
+// Last.fm & Integrations Implementation
+function generateLastFmSignature(params, secret) {
+    const keys = Object.keys(params).sort();
+    let signatureSource = "";
+    for (const key of keys) {
+        if (key === 'format' || key === 'callback') continue;
+        signatureSource += key + params[key];
+    }
+    signatureSource += secret;
+    return window.electronAPI.md5(signatureSource);
+}
+
+const LastFm = {
+    getApiKey() {
+        return localStorage.getItem('vibetube_lastfm_api_key') || '';
+    },
+    getApiSecret() {
+        return localStorage.getItem('vibetube_lastfm_api_secret') || '';
+    },
+    getSessionKey() {
+        return localStorage.getItem('vibetube_lastfm_session') || '';
+    },
+    getUsername() {
+        return localStorage.getItem('vibetube_lastfm_username') || '';
+    },
+    isEnabled() {
+        return localStorage.getItem('vibetube_lastfm_enabled') === 'true' && this.getSessionKey() !== '';
+    },
+
+    async authenticate(apiKey, apiSecret, username, password) {
+        if (!apiKey || !apiSecret || !username || !password) {
+            throw new Error("Всі поля обов'язкові для заповнення!");
+        }
+
+        const passwordMd5 = window.electronAPI.md5(password);
+        const authToken = window.electronAPI.md5(username + passwordMd5);
+
+        const params = {
+            method: 'auth.getMobileSession',
+            api_key: apiKey,
+            username: username,
+            authToken: authToken
+        };
+
+        const api_sig = generateLastFmSignature(params, apiSecret);
+        params.api_sig = api_sig;
+        params.format = 'json';
+
+        const body = new URLSearchParams(params).toString();
+        const response = await fetch('https://ws.audioscrobbler.com/2.0/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: body
+        });
+
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.message || `Помилка Last.fm: ${data.error}`);
+        }
+
+        if (data.session && data.session.key) {
+            localStorage.setItem('vibetube_lastfm_api_key', apiKey);
+            localStorage.setItem('vibetube_lastfm_api_secret', apiSecret);
+            localStorage.setItem('vibetube_lastfm_username', data.session.name);
+            localStorage.setItem('vibetube_lastfm_session', data.session.key);
+            localStorage.setItem('vibetube_lastfm_enabled', 'true');
+            return data.session.name;
+        } else {
+            throw new Error("Не вдалося отримати сесію Last.fm");
+        }
+    },
+
+    disconnect() {
+        localStorage.removeItem('vibetube_lastfm_api_key');
+        localStorage.removeItem('vibetube_lastfm_api_secret');
+        localStorage.removeItem('vibetube_lastfm_username');
+        localStorage.removeItem('vibetube_lastfm_session');
+        localStorage.setItem('vibetube_lastfm_enabled', 'false');
+    },
+
+    async updateNowPlaying(artist, title) {
+        if (!this.isEnabled()) return;
+        const apiKey = this.getApiKey();
+        const apiSecret = this.getApiSecret();
+        const sessionKey = this.getSessionKey();
+
+        const params = {
+            method: 'track.updateNowPlaying',
+            api_key: apiKey,
+            sk: sessionKey,
+            artist: artist,
+            track: title
+        };
+
+        const api_sig = generateLastFmSignature(params, apiSecret);
+        params.api_sig = api_sig;
+        params.format = 'json';
+
+        const body = new URLSearchParams(params).toString();
+        try {
+            const response = await fetch('https://ws.audioscrobbler.com/2.0/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: body
+            });
+            const data = await response.json();
+            if (data.error) {
+                console.error("Last.fm Now Playing error:", data.message);
+            }
+        } catch (e) {
+            console.error("Failed to update Now Playing on Last.fm:", e);
+        }
+    },
+
+    async scrobble(artist, title, timestamp) {
+        if (!this.isEnabled()) return;
+        const apiKey = this.getApiKey();
+        const apiSecret = this.getApiSecret();
+        const sessionKey = this.getSessionKey();
+
+        const params = {
+            method: 'track.scrobble',
+            api_key: apiKey,
+            sk: sessionKey,
+            artist: artist,
+            track: title,
+            timestamp: timestamp.toString()
+        };
+
+        const api_sig = generateLastFmSignature(params, apiSecret);
+        params.api_sig = api_sig;
+        params.format = 'json';
+
+        const body = new URLSearchParams(params).toString();
+        try {
+            const response = await fetch('https://ws.audioscrobbler.com/2.0/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: body
+            });
+            const data = await response.json();
+            if (data.error) {
+                console.error("Last.fm Scrobble error:", data.message);
+            } else {
+                console.log("Successfully scrobbled to Last.fm:", title);
+            }
+        } catch (e) {
+            console.error("Failed to scrobble on Last.fm:", e);
+        }
+    }
+};
+
+function initSettingsIntegrations() {
+    // 1. Settings Tab Switching
+    const tabBtns = document.querySelectorAll('.settings-tab-btn');
+    const tabPanes = document.querySelectorAll('.settings-tab-pane');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetTab = btn.dataset.tab;
+            
+            tabBtns.forEach(b => {
+                b.classList.remove('active');
+                b.style.color = 'var(--text-muted)';
+                b.style.borderBottomColor = 'transparent';
+            });
+            
+            btn.classList.add('active');
+            btn.style.color = 'var(--primary-glow)';
+            btn.style.borderBottomColor = 'var(--primary-glow)';
+            
+            tabPanes.forEach(pane => {
+                if (pane.id === targetTab) {
+                    pane.style.display = 'block';
+                } else {
+                    pane.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // 2. Autostart Integration
+    const autostartCheckbox = document.getElementById('autostart-checkbox');
+    if (autostartCheckbox) {
+        // Load initial state: default to true if never set
+        const savedAutostart = localStorage.getItem('vibetube_autostart') !== 'false';
+        autostartCheckbox.checked = savedAutostart;
+        
+        // Notify main process of initial state on startup
+        if (window.electronAPI && typeof window.electronAPI.setAutostart === 'function') {
+            window.electronAPI.setAutostart(savedAutostart);
+        }
+        
+        autostartCheckbox.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            localStorage.setItem('vibetube_autostart', enabled ? 'true' : 'false');
+            if (window.electronAPI && typeof window.electronAPI.setAutostart === 'function') {
+                window.electronAPI.setAutostart(enabled);
+            }
+        });
+    }
+
+    // 3. Last.fm Integration UI Setup
+    const lastfmApiKeyInput = document.getElementById('lastfm-api-key');
+    const lastfmApiSecretInput = document.getElementById('lastfm-api-secret');
+    const lastfmUsernameInput = document.getElementById('lastfm-username');
+    const lastfmPasswordInput = document.getElementById('lastfm-password');
+    const lastfmConnectBtn = document.getElementById('lastfm-connect-btn');
+    const lastfmDisconnectBtn = document.getElementById('lastfm-disconnect-btn');
+    const lastfmStatusText = document.getElementById('lastfm-status-text');
+    const lastfmUserDisplay = document.getElementById('lastfm-user-display');
+    const lastfmUsernameSpan = document.getElementById('lastfm-username-span');
+    const lastfmConfigForm = document.getElementById('lastfm-config-form');
+
+    function updateLastFmUI() {
+        const isConnected = LastFm.getSessionKey() !== '';
+        if (isConnected) {
+            lastfmStatusText.textContent = 'Підключено';
+            lastfmStatusText.style.color = 'var(--primary-glow)';
+            lastfmUsernameSpan.textContent = LastFm.getUsername();
+            lastfmUserDisplay.style.display = 'block';
+            lastfmDisconnectBtn.style.display = 'block';
+            lastfmConfigForm.style.display = 'none';
+        } else {
+            lastfmStatusText.textContent = 'Не підключено';
+            lastfmStatusText.style.color = 'var(--text-muted)';
+            lastfmUserDisplay.style.display = 'none';
+            lastfmDisconnectBtn.style.display = 'none';
+            lastfmConfigForm.style.display = 'flex';
+            
+            // Prefill stored keys if available
+            lastfmApiKeyInput.value = LastFm.getApiKey();
+            lastfmApiSecretInput.value = LastFm.getApiSecret();
+            lastfmUsernameInput.value = LastFm.getUsername();
+            lastfmPasswordInput.value = '';
+        }
+    }
+
+    if (lastfmConnectBtn) {
+        lastfmConnectBtn.addEventListener('click', async () => {
+            const apiKey = lastfmApiKeyInput.value.trim();
+            const apiSecret = lastfmApiSecretInput.value.trim();
+            const username = lastfmUsernameInput.value.trim();
+            const password = lastfmPasswordInput.value.trim();
+
+            if (!apiKey || !apiSecret || !username || !password) {
+                alert("Будь ласка, заповніть усі поля!");
+                return;
+            }
+
+            lastfmConnectBtn.disabled = true;
+            lastfmConnectBtn.textContent = 'Авторизація...';
+
+            try {
+                const user = await LastFm.authenticate(apiKey, apiSecret, username, password);
+                alert(`Успішно підключено Last.fm користувача: ${user}`);
+                updateLastFmUI();
+            } catch (err) {
+                alert(`Помилка авторизації Last.fm: ${err.message}`);
+            } finally {
+                lastfmConnectBtn.disabled = false;
+                lastfmConnectBtn.textContent = 'Підключити та увійти';
+            }
+        });
+    }
+
+    if (lastfmDisconnectBtn) {
+        lastfmDisconnectBtn.addEventListener('click', () => {
+            if (confirm("Ви дійсно хочете відключити Last.fm?")) {
+                LastFm.disconnect();
+                updateLastFmUI();
+            }
+        });
+    }
+
+    updateLastFmUI();
 }

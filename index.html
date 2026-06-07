@@ -21,7 +21,7 @@
             <span style="font-family: 'Orbitron', sans-serif; font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; color: var(--text-main);">VIBETUBE</span>
         </div>
         <div class="title-bar-actions">
-            <button class="title-bar-btn" id="theme-settings-btn" title="Налаштування кольору & теми"><i class="fa-solid fa-palette"></i></button>
+            <button class="title-bar-btn" id="theme-settings-btn" title="Налаштування"><i class="fa-solid fa-gear"></i></button>
             <button class="title-bar-btn" id="win-min-btn" title="Згорнути"><i class="fa-solid fa-minus"></i></button>
             <button class="title-bar-btn" id="win-max-btn" title="Розгорнути"><i class="fa-regular fa-square" style="font-size: 0.75rem;"></i></button>
             <button class="title-bar-btn close-btn" id="win-close-btn" title="Закрити"><i class="fa-solid fa-xmark"></i></button>
@@ -254,6 +254,12 @@
                                 <input type="text" id="custom-playlist-input" placeholder="Вставте лінк на ваш плейлист або мікс...">
                                 <button id="load-custom-playlist-btn" class="mode-btn">Завантажити плейлист</button>
                             </div>
+                            <div class="custom-playlist-loader" style="margin-top: 10px;">
+                                <button id="local-file-btn" class="mode-btn" style="width: 100%; border: 1px dashed var(--neon-cyan); background: rgba(34, 211, 238, 0.05); color: var(--neon-cyan);">
+                                    <i class="fa-solid fa-file-audio"></i> Відтворити локальний аудіофайл
+                                </button>
+                                <input type="file" id="local-file-input" accept="audio/*" style="display: none;">
+                            </div>
                             <div class="account-actions" style="margin-top: 0.75rem;">
                                 <button class="account-btn" data-type="liked"><i class="fa-solid fa-heart text-red"></i> Улюблене</button>
                                 <button class="account-btn" data-type="later"><i class="fa-solid fa-clock text-blue"></i> Черга</button>
@@ -422,95 +428,165 @@
         </div>
     </div>
 
-    <!-- Theme Settings Modal Overlay -->
+    <!-- Settings Modal Overlay -->
     <div class="theme-modal-overlay" id="theme-modal-overlay">
-        <div class="theme-modal card glass">
-            <div class="card-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-                <h3><i class="fa-solid fa-palette"></i> Налаштування Оформлення</h3>
-                <button class="theme-modal-close-btn" id="theme-modal-close-btn" title="Закрити налаштування теми">
+        <div class="theme-modal card glass" style="max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 1.5rem;">
+            <div class="card-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h3><i class="fa-solid fa-gear" style="color: var(--primary-glow);"></i> Налаштування VibeTube</h3>
+                <button class="theme-modal-close-btn" id="theme-modal-close-btn" title="Закрити налаштування">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <!-- Accent Color Mode selection -->
-            <div class="theme-section" style="margin-bottom: 1.25rem;">
-                <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-circle-half-stroke text-purple"></i> Режим оформлення</h4>
-                <div class="theme-mode-choices" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                    <label class="radio-container">
-                        <input type="radio" name="theme-mode" id="theme-mode-auto" checked>
-                        <span class="radiomark"></span>
-                        Авто-колір (з обкладинки відтворення)
-                    </label>
-                    <label class="radio-container">
-                        <input type="radio" name="theme-mode" id="theme-mode-system">
-                        <span class="radiomark"></span>
-                        Системна палітра (колір вашої ОС)
-                    </label>
-                    <label class="radio-container">
-                        <input type="radio" name="theme-mode" id="theme-mode-manual">
-                        <span class="radiomark"></span>
-                        Власна палітра кольорів
-                    </label>
-                </div>
+            <!-- Settings Tabs -->
+            <div class="settings-tabs" style="display: flex; gap: 15px; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem; flex-shrink: 0;">
+                <button class="settings-tab-btn active" data-tab="tab-theme" style="background: none; border: none; color: var(--primary-glow); font-family: 'Orbitron', sans-serif; font-size: 0.85rem; cursor: pointer; padding: 5px 10px; border-bottom: 2px solid var(--primary-glow); transition: all 0.2s;">
+                    <i class="fa-solid fa-palette"></i> Оформлення
+                </button>
+                <button class="settings-tab-btn" data-tab="tab-integrations" style="background: none; border: none; color: var(--text-muted); font-family: 'Orbitron', sans-serif; font-size: 0.85rem; cursor: pointer; padding: 5px 10px; border-bottom: 2px solid transparent; transition: all 0.2s;">
+                    <i class="fa-solid fa-square-share-nodes"></i> Інтеграції
+                </button>
             </div>
 
-            <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+            <div class="settings-tab-content" style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                <!-- Tab 1: Appearance -->
+                <div class="settings-tab-pane" id="tab-theme">
+                    <!-- Accent Color Mode selection -->
+                    <div class="theme-section" style="margin-bottom: 1.25rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-circle-half-stroke text-purple"></i> Режим оформлення</h4>
+                        <div class="theme-mode-choices" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                            <label class="radio-container">
+                                <input type="radio" name="theme-mode" id="theme-mode-auto" checked>
+                                <span class="radiomark"></span>
+                                Авто-колір (з обкладинки відтворення)
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="theme-mode" id="theme-mode-system">
+                                <span class="radiomark"></span>
+                                Системна палітра (колір вашої ОС)
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="theme-mode" id="theme-mode-manual">
+                                <span class="radiomark"></span>
+                                Власна палітра кольорів
+                            </label>
+                        </div>
+                    </div>
 
-            <!-- Theme Presets selection (shown when manual mode is selected) -->
-            <div class="theme-section" id="theme-manual-controls" style="display: none; margin-bottom: 1.25rem;">
-                <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette text-blue"></i> Колірні пресети & Налаштування</h4>
-                <div class="theme-presets-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;">
-                    <button class="theme-preset-btn active" data-color="#1db954" style="border-color: #1db954;"><span style="background: #1db954;"></span>Spotify</button>
-                    <button class="theme-preset-btn" data-color="#a855f7" style="border-color: #a855f7;"><span style="background: #a855f7;"></span>Orchid</button>
-                    <button class="theme-preset-btn" data-color="#3b82f6" style="border-color: #3b82f6;"><span style="background: #3b82f6;"></span>Sapphire</button>
-                    <button class="theme-preset-btn" data-color="#f59e0b" style="border-color: #f59e0b;"><span style="background: #f59e0b;"></span>Amber</button>
-                    <button class="theme-preset-btn" data-color="#ef4444" style="border-color: #ef4444;"><span style="background: #ef4444;"></span>Crimson</button>
-                    <button class="theme-preset-btn" data-color="#ec4899" style="border-color: #ec4899;"><span style="background: #ec4899;"></span>Hot Pink</button>
+                    <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+
+                    <!-- Theme Presets selection (shown when manual mode is selected) -->
+                    <div class="theme-section" id="theme-manual-controls" style="display: none; margin-bottom: 1.25rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette text-blue"></i> Колірні пресети & Налаштування</h4>
+                        <div class="theme-presets-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;">
+                            <button class="theme-preset-btn active" data-color="#1db954" style="border-color: #1db954;"><span style="background: #1db954;"></span>Spotify</button>
+                            <button class="theme-preset-btn" data-color="#a855f7" style="border-color: #a855f7;"><span style="background: #a855f7;"></span>Orchid</button>
+                            <button class="theme-preset-btn" data-color="#3b82f6" style="border-color: #3b82f6;"><span style="background: #3b82f6;"></span>Sapphire</button>
+                            <button class="theme-preset-btn" data-color="#f59e0b" style="border-color: #f59e0b;"><span style="background: #f59e0b;"></span>Amber</button>
+                            <button class="theme-preset-btn" data-color="#ef4444" style="border-color: #ef4444;"><span style="background: #ef4444;"></span>Crimson</button>
+                            <button class="theme-preset-btn" data-color="#ec4899" style="border-color: #ec4899;"><span style="background: #ec4899;"></span>Hot Pink</button>
+                        </div>
+                        
+                        <!-- Custom Color Picker -->
+                        <div class="custom-color-picker-row" style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 0.85rem; color: var(--text-muted);"><i class="fa-solid fa-eye-dropper"></i> Свій колір:</span>
+                            <input type="color" id="theme-custom-picker" value="#1db954" style="background: transparent; border: none; width: 44px; height: 36px; cursor: pointer;">
+                        </div>
+                    </div>
+
+                    <!-- Sliders for Backdrop Blur and Neon Glow intensity -->
+                    <div class="theme-section" style="margin-bottom: 1.25rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-circle-nodes text-yellow"></i> Ефекти скла & Неону</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Розмиття скла: <span id="theme-blur-val">20px</span></span>
+                                <input type="range" id="theme-blur-slider" min="0" max="40" step="1" value="20" style="flex: 1; accent-color: var(--primary-glow);">
+                            </div>
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-sun"></i> Яскравість неону: <span id="theme-glow-val">100%</span></span>
+                                <input type="range" id="theme-glow-slider" min="0" max="200" step="5" value="100" style="flex: 1; accent-color: var(--primary-glow);">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+
+                    <!-- Visualizer settings section -->
+                    <div class="theme-section">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-chart-simple text-cyan"></i> Налаштування Візуалізатора</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-drum"></i> Чутливість басу: <span id="viz-sens-val">1.0x</span></span>
+                                <input type="range" id="viz-sens-slider" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1; accent-color: var(--primary-glow);">
+                            </div>
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-wave-square"></i> Плавність: <span id="viz-smooth-val">80%</span></span>
+                                <input type="range" id="viz-smooth-slider" min="50" max="95" step="5" value="80" style="flex: 1; accent-color: var(--primary-glow);">
+                            </div>
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 5px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-brush"></i> Колірна схема:</span>
+                                <select id="viz-color-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; cursor: pointer; flex: 1; max-width: 200px;">
+                                    <option value="accent" selected>Колір теми (Акцентний)</option>
+                                    <option value="rainbow">Веселковий градієнт</option>
+                                    <option value="monochrome">Монохромний (Білий)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                
-                <!-- Custom Color Picker -->
-                <div class="custom-color-picker-row" style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">
-                    <span style="font-size: 0.85rem; color: var(--text-muted);"><i class="fa-solid fa-eye-dropper"></i> Свій колір:</span>
-                    <input type="color" id="theme-custom-picker" value="#1db954" style="background: transparent; border: none; width: 44px; height: 36px; cursor: pointer;">
-                </div>
-            </div>
 
-            <!-- Sliders for Backdrop Blur and Neon Glow intensity -->
-            <div class="theme-section">
-                <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-circle-nodes text-yellow"></i> Ефекти скла & Неону</h4>
-                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Розмиття скла: <span id="theme-blur-val">20px</span></span>
-                        <input type="range" id="theme-blur-slider" min="0" max="40" step="1" value="20" style="flex: 1; accent-color: var(--primary-glow);">
+                <!-- Tab 2: Integrations -->
+                <div class="settings-tab-pane" id="tab-integrations" style="display: none;">
+                    <!-- Autostart Section -->
+                    <div class="theme-section" style="margin-bottom: 1.5rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-power-off text-blue"></i> Автозапуск системи</h4>
+                        <label class="checkbox-container" style="padding-left: 28px; line-height: 1.4; display: block; position: relative;">
+                            <input type="checkbox" id="autostart-checkbox">
+                            <span class="checkmark"></span>
+                            Запускати VibeTube автоматично при вході
+                        </label>
                     </div>
-                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-sun"></i> Яскравість неону: <span id="theme-glow-val">100%</span></span>
-                        <input type="range" id="theme-glow-slider" min="0" max="200" step="5" value="100" style="flex: 1; accent-color: var(--primary-glow);">
-                    </div>
-                </div>
-            </div>
 
-            <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+                    <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
 
-            <!-- Visualizer settings section -->
-            <div class="theme-section">
-                <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-chart-simple text-cyan"></i> Налаштування Візуалізатора</h4>
-                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-drum"></i> Чутливість басу: <span id="viz-sens-val">1.0x</span></span>
-                        <input type="range" id="viz-sens-slider" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1; accent-color: var(--primary-glow);">
-                    </div>
-                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-wave-square"></i> Плавність: <span id="viz-smooth-val">80%</span></span>
-                        <input type="range" id="viz-smooth-slider" min="50" max="95" step="5" value="80" style="flex: 1; accent-color: var(--primary-glow);">
-                    </div>
-                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 5px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-brush"></i> Колірна схема:</span>
-                        <select id="viz-color-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; cursor: pointer; flex: 1; max-width: 200px;">
-                            <option value="accent" selected>Колір теми (Акцентний)</option>
-                            <option value="rainbow">Веселковий градієнт</option>
-                            <option value="monochrome">Монохромний (Білий)</option>
-                        </select>
+                    <!-- Last.fm Section -->
+                    <div class="theme-section">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-brands fa-lastfm text-red"></i> Скробблер Last.fm</h4>
+                        
+                        <!-- Connection Status Panel -->
+                        <div id="lastfm-status-panel" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <span id="lastfm-status-text" style="font-size: 0.85rem; font-weight: bold; color: var(--text-muted);">Не підключено</span>
+                                <div id="lastfm-user-display" style="font-size: 0.75rem; color: var(--text-muted); display: none; margin-top: 2px;">Користувач: <span id="lastfm-username-span" style="color: var(--primary-glow); font-weight: bold;"></span></div>
+                            </div>
+                            <button id="lastfm-disconnect-btn" class="mode-btn" style="display: none; padding: 5px 10px; font-size: 0.75rem; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #ef4444;">Відключити</button>
+                        </div>
+
+                        <!-- Connection Form -->
+                        <div id="lastfm-config-form" style="display: flex; flex-direction: column; gap: 10px;">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px; line-height: 1.4;">
+                                Автоматично надсилайте ваші треки до профілю Last.fm. Створіть власні API-ключі на сторінці <a href="https://www.last.fm/api/account/create" target="_blank" style="color: var(--primary-glow); text-decoration: underline;">Last.fm API</a>.
+                            </p>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <label style="font-size: 0.75rem; color: var(--text-muted);">API Key</label>
+                                <input type="text" id="lastfm-api-key" placeholder="Введіть API Key..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; color: var(--text-main); font-size: 0.8rem; font-family: inherit;">
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <label style="font-size: 0.75rem; color: var(--text-muted);">Shared Secret</label>
+                                <input type="password" id="lastfm-api-secret" placeholder="Введіть Shared Secret..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; color: var(--text-main); font-size: 0.8rem; font-family: inherit;">
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <label style="font-size: 0.75rem; color: var(--text-muted);">Username (Last.fm)</label>
+                                <input type="text" id="lastfm-username" placeholder="Введіть Username..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; color: var(--text-main); font-size: 0.8rem; font-family: inherit;">
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <label style="font-size: 0.75rem; color: var(--text-muted);">Password (Last.fm)</label>
+                                <input type="password" id="lastfm-password" placeholder="Введіть пароль (не зберігається)..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; color: var(--text-main); font-size: 0.8rem; font-family: inherit;">
+                            </div>
+                            <button id="lastfm-connect-btn" class="mode-btn" style="margin-top: 10px; width: 100%; border: 1px solid var(--primary-glow); background: rgba(34, 211, 238, 0.05); color: var(--text-main); font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+                                Підключити та увійти
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

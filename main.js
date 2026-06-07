@@ -283,7 +283,7 @@ function createTray() {
     });
 }
 
-function setupAutostart() {
+function setAutostartEnabled(enabled) {
     if (process.platform === 'linux') {
         const fs = require('fs');
         const os = require('os');
@@ -291,12 +291,13 @@ function setupAutostart() {
         const desktopFilePath = path.join(autostartDir, 'vibetube.desktop');
         
         try {
-            if (!fs.existsSync(autostartDir)) {
-                fs.mkdirSync(autostartDir, { recursive: true });
-            }
-            
-            const projectDir = __dirname;
-            const desktopContent = `[Desktop Entry]
+            if (enabled) {
+                if (!fs.existsSync(autostartDir)) {
+                    fs.mkdirSync(autostartDir, { recursive: true });
+                }
+                
+                const projectDir = __dirname;
+                const desktopContent = `[Desktop Entry]
 Type=Application
 Version=1.0
 Name=VibeTube
@@ -308,30 +309,39 @@ StartupNotify=false
 Categories=Audio;Music;Player;AudioVideo;
 X-GNOME-Autostart-enabled=true
 `;
-            fs.writeFileSync(desktopFilePath, desktopContent, 'utf8');
-            console.log("[Autostart] Linux .desktop file created/updated at:", desktopFilePath);
+                fs.writeFileSync(desktopFilePath, desktopContent, 'utf8');
+                console.log("[Autostart] Linux .desktop file enabled.");
+            } else {
+                if (fs.existsSync(desktopFilePath)) {
+                    fs.unlinkSync(desktopFilePath);
+                    console.log("[Autostart] Linux .desktop file disabled.");
+                }
+            }
         } catch (e) {
-            console.error("[Autostart] Failed to setup Linux autostart:", e);
+            console.error("[Autostart] Failed to manage Linux autostart:", e);
         }
     } else {
         try {
             app.setLoginItemSettings({
-                openAtLogin: true,
+                openAtLogin: enabled,
                 path: process.execPath,
                 args: [__dirname]
             });
-            console.log("[Autostart] Windows/macOS login settings updated.");
+            console.log("[Autostart] Windows/macOS login settings set to:", enabled);
         } catch (e) {
-            console.error("[Autostart] Failed to setup Windows/macOS autostart:", e);
+            console.error("[Autostart] Failed to set Windows/macOS autostart:", e);
         }
     }
 }
+
+ipcMain.on('set-autostart', (event, enabled) => {
+    setAutostartEnabled(enabled);
+});
 
 app.whenReady().then(() => {
     // Set App User Model ID for Windows notifications grouping
     app.setAppUserModelId('org.vibetube.player');
     
-    setupAutostart();
     startPythonServer();
     createWindow();
     createTray();
