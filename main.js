@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, systemPreferences } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -6,6 +6,19 @@ let mainWindow = null;
 let pyServer = null;
 
 // IPC handlers for custom frameless window title bar controls
+ipcMain.handle('get-system-accent-color', () => {
+    try {
+        if (process.platform === 'win32' || process.platform === 'darwin') {
+            if (systemPreferences && typeof systemPreferences.getAccentColor === 'function') {
+                return systemPreferences.getAccentColor();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to get system accent color:", e);
+    }
+    return null;
+});
+
 ipcMain.on('window-minimize', () => {
     if (mainWindow) mainWindow.minimize();
 });

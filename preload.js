@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     maximize: () => ipcRenderer.send('window-maximize'),
     close: () => ipcRenderer.send('window-close'),
     updateProgress: (percentage) => ipcRenderer.send('playback-progress-changed', percentage),
-    toggleMiniPlayer: (isMini) => ipcRenderer.send('window-toggle-mini', isMini)
+    toggleMiniPlayer: (isMini) => ipcRenderer.send('window-toggle-mini', isMini),
+    getSystemAccentColor: () => ipcRenderer.invoke('get-system-accent-color')
 });

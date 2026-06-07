@@ -21,6 +21,10 @@ let userPlaylists = [];
 let recentSearches = JSON.parse(localStorage.getItem('vibetube_recent_searches') || '[]');
 let activeSuggestionIndex = -1;
 
+// Theme Customization Variables
+let themeMode = 'auto'; // 'auto', 'system', 'manual'
+let lastManualColor = '#1db954';
+
 // Audio Effects State
 let bassBoostActive = false;
 let bassBoostGain = 8;
@@ -87,6 +91,20 @@ const eqModalOverlay = document.getElementById('eq-modal-overlay');
 const eqToggleBtn = document.getElementById('eq-toggle-btn');
 const eqModalCloseBtn = document.getElementById('eq-modal-close-btn');
 const miniPlayerBtn = document.getElementById('mini-player-btn');
+
+// Theme Settings Elements
+const themeSettingsBtn = document.getElementById('theme-settings-btn');
+const themeModalOverlay = document.getElementById('theme-modal-overlay');
+const themeModalCloseBtn = document.getElementById('theme-modal-close-btn');
+const themeModeAuto = document.getElementById('theme-mode-auto');
+const themeModeSystem = document.getElementById('theme-mode-system');
+const themeModeManual = document.getElementById('theme-mode-manual');
+const themeManualControls = document.getElementById('theme-manual-controls');
+const themeCustomPicker = document.getElementById('theme-custom-picker');
+const themeBlurSlider = document.getElementById('theme-blur-slider');
+const themeBlurVal = document.getElementById('theme-blur-val');
+const themeGlowSlider = document.getElementById('theme-glow-slider');
+const themeGlowVal = document.getElementById('theme-glow-val');
 
 // Player UI Elements
 const trackArtwork = document.getElementById('track-artwork');
@@ -212,6 +230,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Restore last playing state if available
     restoreLastState();
+
+    // Initialize Theme and Customization Settings
+    initThemeSettings();
 });
 
 // Setup All Events
@@ -1656,7 +1677,7 @@ function applyPreset(name) {
 }
 
 // Toggle visualizer style mode
-const VISUALIZER_MODES = ['bars', 'wave', 'spikes', 'spectrum', 'decibels', 'battery', 'particle'];
+const VISUALIZER_MODES = ['bars', 'wave', 'spikes', 'spectrum', 'decibels', 'battery', 'particle', 'retro'];
 function toggleVisualizerMode() {
     const idx = VISUALIZER_MODES.indexOf(visualizerMode);
     visualizerMode = VISUALIZER_MODES[(idx + 1) % VISUALIZER_MODES.length];
@@ -1685,6 +1706,8 @@ function updateVisualizerView() {
         visualizerModeBtn.innerHTML = '<i class="fa-solid fa-arrows-spin"></i> Режим: Battery';
     } else if (visualizerMode === 'particle') {
         visualizerModeBtn.innerHTML = '<i class="fa-solid fa-snowflake"></i> Режим: Particle';
+    } else if (visualizerMode === 'retro') {
+        visualizerModeBtn.innerHTML = '<i class="fa-solid fa-compact-disc"></i> Режим: Ретро Pioneer';
     }
 }
 
@@ -2108,6 +2131,110 @@ function startVisualizer() {
                 canvasCtx.fillStyle = p.color;
                 canvasCtx.fill();
             }
+        } else if (visualizerMode === 'retro') {
+            // Retro Pioneer VFD Car Stereo Spectrum Analyzer
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Draw retro black-blue vacuum VFD display backdrop
+            canvasCtx.fillStyle = '#060912';
+            canvasCtx.fillRect(0, 0, width, height);
+            
+            // Draw glowing horizontal VFD decibel marking grids
+            canvasCtx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
+            canvasCtx.lineWidth = 1;
+            const dbLevels = [0.15, 0.35, 0.55, 0.75, 0.9];
+            dbLevels.forEach(lvl => {
+                const y = height * (1 - lvl);
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, y);
+                canvasCtx.lineTo(width, y);
+                canvasCtx.stroke();
+            });
+            
+            const channelHeight = (height - 35) / 2;
+            const bands = 14; // 14-band display per channel
+            const barWidth = (width / bands);
+            const segments = 10; // 10 discrete segments per column
+            
+            for (let ch = 0; ch < 2; ch++) {
+                const yOffset = ch * (channelHeight + 15) + 8;
+                
+                // Draw VFD retro font L / R labels
+                canvasCtx.font = '800 9px "Orbitron", sans-serif';
+                canvasCtx.fillStyle = ch === 0 ? '#ff9f00' : '#00e5ff';
+                canvasCtx.fillText(ch === 0 ? 'CH L' : 'CH R', 8, yOffset + 12);
+                
+                for (let b = 0; b < bands; b++) {
+                    // Get frequency data index (skewed for stereo difference!)
+                    const freqIdx = Math.floor((b / bands) * bufferLength * 0.3) + (ch * 5);
+                    const val = dataArray[freqIdx] || 0;
+                    const percent = val / 255;
+                    
+                    const x = b * barWidth + 45; // Shift for labels
+                    const usableWidth = barWidth - 8;
+                    const activeSegments = Math.round(percent * segments);
+                    
+                    const peakKey = `retro_peak_${ch}_${b}`;
+                    if (peakHeights[peakKey] === undefined || percent > peakHeights[peakKey]) {
+                        peakHeights[peakKey] = percent;
+                        peakHoldTimes[peakKey] = 25; // hold peak segment
+                    } else {
+                        if (peakHoldTimes[peakKey] > 0) {
+                            peakHoldTimes[peakKey]--;
+                        } else {
+                            peakHeights[peakKey] -= 0.018; // slow drop
+                            if (peakHeights[peakKey] < 0) peakHeights[peakKey] = 0;
+                        }
+                    }
+                    
+                    // Draw vertical segment blocks
+                    for (let s = 0; s < segments; s++) {
+                        const segY = yOffset + channelHeight - (s / segments) * channelHeight;
+                        const segH = (channelHeight / segments) - 2;
+                        
+                        let color;
+                        if (s < 5) {
+                            color = 'rgba(0, 245, 212, '; // Bottom VFD Teal
+                        } else if (s < 8) {
+                            color = 'rgba(0, 229, 255, '; // Mid pure VFD Cyan
+                        } else {
+                            color = 'rgba(255, 75, 75, ';  // Top red warning band
+                        }
+                        
+                        const isActive = s < activeSegments;
+                        canvasCtx.fillStyle = color + (isActive ? '0.85)' : '0.04)';
+                        
+                        if (isActive) {
+                            canvasCtx.shadowBlur = 8;
+                            canvasCtx.shadowColor = canvasCtx.fillStyle;
+                        } else {
+                            canvasCtx.shadowBlur = 0;
+                        }
+                        canvasCtx.fillRect(x, segY, usableWidth - 4, segH);
+                    }
+                    canvasCtx.shadowBlur = 0;
+                    
+                    // Draw falling amber Peak Indicators
+                    const peakPercent = peakHeights[peakKey];
+                    if (peakPercent > 0.05) {
+                        const peakSegIdx = Math.min(segments - 1, Math.floor(peakPercent * segments));
+                        const peakY = yOffset + channelHeight - (peakSegIdx / segments) * channelHeight;
+                        const peakH = (channelHeight / segments) - 2;
+                        
+                        canvasCtx.fillStyle = '#ff9f00'; // Amber peak hold
+                        canvasCtx.shadowBlur = 10;
+                        canvasCtx.shadowColor = '#ff9f00';
+                        canvasCtx.fillRect(x, peakY, usableWidth - 4, peakH);
+                        canvasCtx.shadowBlur = 0;
+                    }
+                }
+            }
+            
+            // Faint retro stereo car audio markings at the bottom
+            canvasCtx.font = '700 8px "Orbitron", sans-serif';
+            canvasCtx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+            canvasCtx.fillText('PIONEER DECK D-721', 45, height - 3);
+            canvasCtx.fillText('OEL MULTI-SPECTRUM ANALYZER', width - 180, height - 3);
         }
     }
     
@@ -2354,6 +2481,8 @@ function parseLrc(lrcText) {
 
 // Dynamic Color Extraction
 function extractDominantColor(imgUrl) {
+    if (themeMode !== 'auto') return;
+
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.onload = function() {
@@ -2406,12 +2535,15 @@ function updateAppGlowTheme(r, g, b) {
     const cg = 255 - g;
     const cb = 255 - b;
     
+    // Get custom glow intensity multiplier (defaults to 100%)
+    const glowMult = parseFloat(localStorage.getItem('vibetube_theme_glow') || '100') / 100;
+    
     document.documentElement.style.setProperty('--primary-glow', `rgb(${r}, ${g}, ${b})`);
-    document.documentElement.style.setProperty('--primary-glow-rgba', `rgba(${r}, ${g}, ${b}, 0.5)`);
+    document.documentElement.style.setProperty('--primary-glow-rgba', `rgba(${r}, ${g}, ${b}, ${0.45 * glowMult})`);
     document.documentElement.style.setProperty('--neon-purple', `rgb(${r}, ${g}, ${b})`);
 
     document.documentElement.style.setProperty('--secondary-glow', `rgb(${cr}, ${cg}, ${cb})`);
-    document.documentElement.style.setProperty('--secondary-glow-rgba', `rgba(${cr}, ${cg}, ${cb}, 0.5)`);
+    document.documentElement.style.setProperty('--secondary-glow-rgba', `rgba(${cr}, ${cg}, ${cb}, ${0.45 * glowMult})`);
     document.documentElement.style.setProperty('--neon-cyan', `rgb(${cr}, ${cg}, ${cb})`);
 }
 
@@ -2657,6 +2789,210 @@ function showTrackNotification(track) {
             body: `${track.title}\n${track.channel}`,
             icon: track.thumbnail || '',
             silent: true
+        });
+    }
+}
+
+// Convert Hex to RGB object
+function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    let r, g, b;
+    if (hex.length === 3) {
+        r = parseInt(hex.substring(0, 1).repeat(2), 16);
+        g = parseInt(hex.substring(1, 2).repeat(2), 16);
+        b = parseInt(hex.substring(2, 3).repeat(2), 16);
+    } else {
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+    }
+    return { r, g, b };
+}
+
+// Apply Hex Color to CSS variables
+function applyThemeColor(hex) {
+    const rgb = hexToRgb(hex);
+    if (rgb) {
+        updateAppGlowTheme(rgb.r, rgb.g, rgb.b);
+    }
+}
+
+// Fetch and Apply OS System Accent Color
+async function applySystemAccentColor() {
+    if (window.electronAPI && window.electronAPI.getSystemAccentColor) {
+        try {
+            const hex = await window.electronAPI.getSystemAccentColor();
+            if (hex) {
+                // Electron might return system color with/without # or alpha in ARGB (like aabbccff)
+                // Let's sanitize to standard hex
+                let cleanHex = hex.trim().replace('#', '');
+                if (cleanHex.length === 8) {
+                    // ARGB/RGBA format - take the RGB portion
+                    cleanHex = cleanHex.substring(0, 6);
+                }
+                const finalHex = `#${cleanHex}`;
+                applyThemeColor(finalHex);
+            } else {
+                // Fallback if system color is empty/null (e.g. Linux)
+                applyThemeColor(lastManualColor);
+            }
+        } catch (e) {
+            console.error("Failed to apply system accent color:", e);
+            applyThemeColor(lastManualColor);
+        }
+    } else {
+        applyThemeColor(lastManualColor);
+    }
+}
+
+// Initialize Customization Settings
+function initThemeSettings() {
+    // 1. Load settings from localStorage
+    themeMode = localStorage.getItem('vibetube_theme_mode') || 'auto';
+    lastManualColor = localStorage.getItem('vibetube_theme_color') || '#1db954';
+    const savedBlur = localStorage.getItem('vibetube_theme_blur') || '20';
+    const savedGlow = localStorage.getItem('vibetube_theme_glow') || '100';
+
+    // 2. Set UI fields to match loaded state
+    if (themeBlurSlider) {
+        themeBlurSlider.value = savedBlur;
+        themeBlurVal.textContent = `${savedBlur}px`;
+        document.documentElement.style.setProperty('--card-blur', `${savedBlur}px`);
+    }
+    if (themeGlowSlider) {
+        themeGlowSlider.value = savedGlow;
+        themeGlowVal.textContent = `${savedGlow}%`;
+        document.documentElement.style.setProperty('--glow-multiplier', parseFloat(savedGlow) / 100);
+    }
+
+    // Select correct radio button
+    if (themeMode === 'auto') {
+        themeModeAuto.checked = true;
+        themeManualControls.style.display = 'none';
+        // Auto-extract color from current playing song if active
+        if (currentIndex !== -1 && activePlaylist[currentIndex]) {
+            extractDominantColor(activePlaylist[currentIndex].thumbnail);
+        } else {
+            applyThemeColor('#1db954');
+        }
+    } else if (themeMode === 'system') {
+        themeModeSystem.checked = true;
+        themeManualControls.style.display = 'none';
+        applySystemAccentColor();
+    } else {
+        themeModeManual.checked = true;
+        themeManualControls.style.display = 'block';
+        applyThemeColor(lastManualColor);
+        themeCustomPicker.value = lastManualColor;
+        
+        // Highlight active preset
+        document.querySelectorAll('.theme-preset-btn').forEach(btn => {
+            if (btn.dataset.color === lastManualColor) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    // 3. Bind Event Listeners
+    // Modal toggle
+    if (themeSettingsBtn) {
+        themeSettingsBtn.addEventListener('click', () => {
+            themeModalOverlay.classList.add('active');
+        });
+    }
+    if (themeModalCloseBtn) {
+        themeModalCloseBtn.addEventListener('click', () => {
+            themeModalOverlay.classList.remove('active');
+        });
+    }
+    if (themeModalOverlay) {
+        themeModalOverlay.addEventListener('click', (e) => {
+            if (e.target === themeModalOverlay) {
+                themeModalOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Radio changes
+    const handleModeChange = (mode) => {
+        themeMode = mode;
+        localStorage.setItem('vibetube_theme_mode', mode);
+        
+        if (mode === 'auto') {
+            themeManualControls.style.display = 'none';
+            if (currentIndex !== -1 && activePlaylist[currentIndex]) {
+                extractDominantColor(activePlaylist[currentIndex].thumbnail);
+            } else {
+                applyThemeColor('#1db954');
+            }
+        } else if (mode === 'system') {
+            themeManualControls.style.display = 'none';
+            applySystemAccentColor();
+        } else {
+            themeManualControls.style.display = 'block';
+            applyThemeColor(lastManualColor);
+            themeCustomPicker.value = lastManualColor;
+        }
+    };
+
+    if (themeModeAuto) themeModeAuto.addEventListener('change', () => handleModeChange('auto'));
+    if (themeModeSystem) themeModeSystem.addEventListener('change', () => handleModeChange('system'));
+    if (themeModeManual) themeModeManual.addEventListener('change', () => handleModeChange('manual'));
+
+    // Preset button clicks
+    document.querySelectorAll('.theme-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.theme-preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const color = btn.dataset.color;
+            lastManualColor = color;
+            themeCustomPicker.value = color;
+            localStorage.setItem('vibetube_theme_color', color);
+            applyThemeColor(color);
+        });
+    });
+
+    // Custom color picker changes
+    if (themeCustomPicker) {
+        themeCustomPicker.addEventListener('input', (e) => {
+            document.querySelectorAll('.theme-preset-btn').forEach(b => b.classList.remove('active'));
+            const color = e.target.value;
+            lastManualColor = color;
+            localStorage.setItem('vibetube_theme_color', color);
+            applyThemeColor(color);
+        });
+    }
+
+    // Blur slider events
+    if (themeBlurSlider) {
+        themeBlurSlider.addEventListener('input', () => {
+            const val = themeBlurSlider.value;
+            themeBlurVal.textContent = `${val}px`;
+            document.documentElement.style.setProperty('--card-blur', `${val}px`);
+            localStorage.setItem('vibetube_theme_blur', val);
+        });
+    }
+
+    // Glow slider events
+    if (themeGlowSlider) {
+        themeGlowSlider.addEventListener('input', () => {
+            const val = themeGlowSlider.value;
+            themeGlowVal.textContent = `${val}%`;
+            document.documentElement.style.setProperty('--glow-multiplier', parseFloat(val) / 100);
+            localStorage.setItem('vibetube_theme_glow', val);
+            
+            if (themeMode === 'auto' && currentIndex !== -1 && activePlaylist[currentIndex]) {
+                const savedMode = themeMode;
+                themeMode = 'auto'; 
+                extractDominantColor(activePlaylist[currentIndex].thumbnail);
+                themeMode = savedMode;
+            } else if (themeMode === 'system') {
+                applySystemAccentColor();
+            } else {
+                applyThemeColor(lastManualColor);
+            }
         });
     }
 }

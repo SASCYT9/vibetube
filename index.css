@@ -219,8 +219,8 @@ body {
 /* Glassmorphism Cards */
 .card.glass {
     background: var(--card-bg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(var(--card-blur, 20px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--card-blur, 20px)) saturate(180%);
     border: 1px solid var(--border-color);
     border-radius: 24px;
     padding: 2rem;
@@ -2112,6 +2112,158 @@ body.mini-player-active #mini-player-btn {
     padding: 0.4rem;
     font-size: 0.78rem;
     height: 32px;
+}
+
+/* Theme Customization Modal Overlay */
+.theme-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(8, 9, 15, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.theme-modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.theme-modal {
+    width: 90%;
+    max-width: 500px;
+    background: rgba(18, 20, 32, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--primary-glow-rgba);
+    border-radius: 24px;
+    padding: 2rem;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-modal-overlay.active .theme-modal {
+    transform: translateY(0);
+}
+
+.theme-modal-close-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: var(--text-main);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.theme-modal-close-btn:hover {
+    background: rgba(239, 68, 68, 0.8);
+    transform: scale(1.08);
+}
+
+/* Radio button styles for customization */
+.radio-container {
+    display: block;
+    position: relative;
+    padding-left: 30px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 0.92rem;
+    user-select: none;
+    color: var(--text-main);
+    transition: var(--transition);
+}
+
+.radio-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.radiomark {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    height: 18px;
+    width: 18px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+}
+
+.radio-container:hover input ~ .radiomark {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.radio-container input:checked ~ .radiomark {
+    background-color: var(--primary-glow);
+    border-color: var(--primary-glow);
+}
+
+.radiomark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+.radio-container input:checked ~ .radiomark:after {
+    display: block;
+}
+
+.radio-container .radiomark:after {
+    top: 5px;
+    left: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0c0c0e;
+}
+
+/* Theme presets styling */
+.theme-preset-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: var(--transition);
+}
+
+.theme-preset-btn span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.theme-preset-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.theme-preset-btn.active {
+    color: var(--text-main);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.05);
 }
 
 
