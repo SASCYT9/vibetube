@@ -1614,22 +1614,52 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
 
 /* Custom spacing adjustments for Spotify look & breathability */
 .custom-playlist-loader {
-    gap: 12px !important;
+    padding: 0.25rem 0 1rem 0 !important;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem !important;
+    width: 100%;
+}
+
+#custom-playlist-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+    outline: none;
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+#custom-playlist-input:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.2);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 #load-custom-playlist-btn {
+    width: 100%;
+    padding: 0.75rem !important;
+    font-size: 0.95rem;
+    border-radius: 12px;
+    font-weight: 700;
+    white-space: nowrap;
     flex-shrink: 0;
     background: var(--primary-glow);
     color: #0c0c0e;
     border-color: var(--primary-glow);
-    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
 }
 
 #load-custom-playlist-btn:hover {
     background: var(--secondary-glow);
     color: #0c0c0e;
     border-color: var(--secondary-glow);
-    transform: scale(1.03);
+    transform: translateY(-2px);
 }
 
 /* account-actions override removed to support column layout */
