@@ -2002,6 +2002,10 @@ body.mini-player-active .settings-panel,
 body.mini-player-active .bg-glow,
 body.mini-player-active .visualizer-container,
 body.mini-player-active .volume-and-mode .volume-container,
+body.mini-player-active .time-label,
+body.mini-player-active .ctrl-btn.extra-btn,
+body.mini-player-active #song-radio-btn,
+body.mini-player-active #like-btn,
 body.mini-player-active .mode-container button:not(#mini-player-btn) {
     display: none !important;
 }
@@ -2021,22 +2025,82 @@ body.mini-player-active .player-panel .card.glass {
     height: 100%;
     border-radius: 0;
     border: none;
-    padding: 1.25rem;
+    padding: 0.75rem 1rem;
     background: #08090f;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
 }
 
 body.mini-player-active .track-artwork-container {
-    width: 160px;
-    height: 160px;
-    margin: 0 auto 1.25rem auto;
+    width: 125px;
+    height: 125px;
+    margin: 0.25rem auto;
+}
+
+body.mini-player-active .track-info {
+    text-align: center;
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+body.mini-player-active .track-title-wrapper {
+    justify-content: center;
+    gap: 0;
+}
+
+body.mini-player-active .track-info h2 {
+    font-size: 1.05rem;
+    max-width: 240px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.mini-player-active .track-info p {
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.mini-player-active .progress-container {
+    width: 100%;
+    margin-bottom: 0.25rem;
+    padding: 0 0.5rem;
+}
+
+body.mini-player-active .controls-container {
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+    width: 100%;
+    justify-content: center;
+}
+
+body.mini-player-active .ctrl-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
+}
+
+body.mini-player-active .ctrl-btn.play-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+}
+
+body.mini-player-active .volume-and-mode {
+    border-top: none;
+    padding-top: 0;
+    gap: 0;
+    width: 100%;
 }
 
 body.mini-player-active .mode-container {
     grid-template-columns: 1fr;
-    margin-top: 1rem;
+    margin-top: 0.25rem;
+    width: 100%;
 }
 
 body.mini-player-active #mini-player-btn {
@@ -2045,6 +2109,9 @@ body.mini-player-active #mini-player-btn {
     background: var(--primary-glow);
     color: #0c0c0e;
     border-color: var(--primary-glow);
+    padding: 0.4rem;
+    font-size: 0.78rem;
+    height: 32px;
 }
 
 
