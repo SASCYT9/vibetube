@@ -20,6 +20,10 @@ let lastFmTrack = null;
 let lastFmStartTime = 0;
 let lastFmMinPlayTime = 0;
 let lastFmScrobbled = false;
+let staticLyrics = [];
+let staticTranslatedLyrics = [];
+let staticRomanizedLyrics = [];
+let lyricsLanguageState = 'original';
 let userPlaylistsLoaded = false;
 let userPlaylists = [];
 let recentSearches = JSON.parse(localStorage.getItem('vibetube_recent_searches') || '[]');
@@ -861,6 +865,20 @@ function setupEventListeners() {
                 localFileInput.value = '';
             }
         });
+    }
+
+    // Lyrics actions event listeners
+    const translateBtn = document.getElementById('lyrics-translate-btn');
+    if (translateBtn) {
+        translateBtn.addEventListener('click', translateLyrics);
+    }
+    const romanizeBtn = document.getElementById('lyrics-romanize-btn');
+    if (romanizeBtn) {
+        romanizeBtn.addEventListener('click', romanizeLyrics);
+    }
+    const cardBtn = document.getElementById('lyrics-card-btn');
+    if (cardBtn) {
+        cardBtn.addEventListener('click', openLyricsCardCreator);
     }
 }
 
@@ -2222,6 +2240,18 @@ function startVisualizer() {
                 artworkPulse.style.opacity = isPlaying ? bassPercent * 0.8 : 0;
                 artworkPulse.style.transform = isPlaying ? `scale(${1 + bassPercent * 0.15})` : '';
             }
+
+            // Pulse the background glow
+            const bgGlow = document.querySelector('.bg-glow');
+            if (bgGlow && isPlaying) {
+                bgGlow.style.opacity = (0.6 + bassPercent * 0.45).toString();
+                bgGlow.style.transform = `scale(${1 + bassPercent * 0.05})`;
+                bgGlow.style.transition = 'transform 0.1s ease-out, opacity 0.1s ease-out';
+            } else if (bgGlow) {
+                bgGlow.style.opacity = '';
+                bgGlow.style.transform = '';
+                bgGlow.style.transition = '';
+            }
         }
 
         if (visualizerMode === 'bars') {
@@ -2979,6 +3009,9 @@ function handleMprisCommand(cmd) {
 
 async function fetchLyrics(artist, title) {
     const lyricsText = document.getElementById('lyrics-text');
+    const lyricsToolbar = document.getElementById('lyrics-toolbar');
+    
+    if (lyricsToolbar) lyricsToolbar.style.display = 'none';
     lyricsText.innerHTML = `
         <div class="spinner-container">
             <i class="fa-solid fa-circle-notch fa-spin"></i>
@@ -2987,7 +3020,17 @@ async function fetchLyrics(artist, title) {
     `;
 
     syncedLyrics = [];
+    staticLyrics = [];
+    staticTranslatedLyrics = [];
+    staticRomanizedLyrics = [];
+    lyricsLanguageState = 'original';
     currentLyricsIndex = -1;
+
+    // Reset button labels
+    const translateBtn = document.getElementById('lyrics-translate-btn');
+    if (translateBtn) translateBtn.innerHTML = '<i class="fa-solid fa-g-translate"></i> Перекласти';
+    const romanizeBtn = document.getElementById('lyrics-romanize-btn');
+    if (romanizeBtn) romanizeBtn.innerHTML = '<i class="fa-solid fa-language"></i> Романізувати';
 
     try {
         const response = await fetch(`/api/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`);
@@ -3000,15 +3043,18 @@ async function fetchLyrics(artist, title) {
         }
         
         if (syncedLyrics.length > 0) {
+            if (lyricsToolbar) lyricsToolbar.style.display = 'flex';
             const linesHtml = syncedLyrics.map((line, idx) => `
                 <div class="lyrics-line" id="lyrics-line-${idx}" data-time="${line.time}">${escapeHTML(line.text)}</div>
             `).join('');
             lyricsText.innerHTML = linesHtml;
         } else if (data.lyrics && data.lyrics !== "Текст пісні не знайдено.") {
-            const lines = data.lyrics.split('\n');
-            const linesHtml = lines.map(line => `<div class="lyrics-line">${escapeHTML(line)}</div>`).join('');
+            staticLyrics = data.lyrics.split('\n').map(l => l.trim()).filter(l => l !== '');
+            if (lyricsToolbar) lyricsToolbar.style.display = 'flex';
+            const linesHtml = staticLyrics.map(line => `<div class="lyrics-line">${escapeHTML(line)}</div>`).join('');
             lyricsText.innerHTML = linesHtml;
         } else {
+            if (lyricsToolbar) lyricsToolbar.style.display = 'none';
             lyricsText.innerHTML = `
                 <div class="empty-state">
                     <i class="fa-solid fa-microphone-lines-slash"></i>
@@ -3018,6 +3064,7 @@ async function fetchLyrics(artist, title) {
         }
     } catch (err) {
         console.error("Lyrics error:", err);
+        if (lyricsToolbar) lyricsToolbar.style.display = 'none';
         lyricsText.innerHTML = `
             <div class="empty-state">
                 <i class="fa-solid fa-circle-exclamation text-red"></i>
@@ -3591,6 +3638,8 @@ function initThemeSettings() {
     
     // Initialize Integrations (Autostart, Last.fm)
     initSettingsIntegrations();
+    // Initialize Lyrics Quote Card Creator
+    initLyricsCardCreatorUI();
 }
 
 function updateTrackPlayStats(track) {
@@ -3975,4 +4024,562 @@ function initSettingsIntegrations() {
     }
 
     updateLastFmUI();
+}
+
+// Lyrics Translator, Romanizer & Quote Card Implementation
+let selectedLyricCardLines = [];
+
+async function translateLyrics() {
+    if (lyricsLanguageState === 'translated') {
+        restoreOriginalLyrics();
+        return;
+    }
+    
+    const translateBtn = document.getElementById('lyrics-translate-btn');
+    const originalText = translateBtn.innerHTML;
+    translateBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Переклад...';
+    translateBtn.disabled = true;
+    
+    try {
+        let lines = [];
+        let isSynced = syncedLyrics.length > 0;
+        
+        if (isSynced) {
+            lines = syncedLyrics.map(l => l.text);
+        } else {
+            lines = staticLyrics;
+        }
+        
+        if (lines.length === 0) return;
+        
+        const fullText = lines.join(' ||| ');
+        
+        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=uk&dt=t&q=${encodeURIComponent(fullText)}`);
+        if (!res.ok) throw new Error("Translation request failed");
+        
+        const data = await res.json();
+        const fullTranslated = data[0].map(s => s[0]).join('');
+        const translatedLines = fullTranslated.split(/\|\s*\|\s*\|/).map(s => s.trim());
+        
+        if (isSynced) {
+            syncedLyrics.forEach((line, idx) => {
+                line.translatedText = translatedLines[idx] || line.text;
+            });
+        } else {
+            staticTranslatedLyrics = staticLyrics.map((line, idx) => translatedLines[idx] || line);
+        }
+        
+        lyricsLanguageState = 'translated';
+        renderActiveLyricsState();
+        translateBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Оригінал';
+        
+        const romanizeBtn = document.getElementById('lyrics-romanize-btn');
+        if (romanizeBtn) romanizeBtn.innerHTML = '<i class="fa-solid fa-language"></i> Романізувати';
+        
+    } catch (err) {
+        console.error("Translation error:", err);
+        alert("Не вдалося перекласти текст пісні.");
+    } finally {
+        translateBtn.disabled = false;
+        if (lyricsLanguageState !== 'translated') {
+            translateBtn.innerHTML = originalText;
+        }
+    }
+}
+
+async function romanizeLyrics() {
+    if (lyricsLanguageState === 'romanized') {
+        restoreOriginalLyrics();
+        return;
+    }
+
+    const romanizeBtn = document.getElementById('lyrics-romanize-btn');
+    const originalText = romanizeBtn.innerHTML;
+    romanizeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Романізація...';
+    romanizeBtn.disabled = true;
+
+    try {
+        let lines = [];
+        let isSynced = syncedLyrics.length > 0;
+        
+        if (isSynced) {
+            lines = syncedLyrics.map(l => l.text);
+        } else {
+            lines = staticLyrics;
+        }
+
+        if (lines.length === 0) return;
+
+        const fullText = lines.join(' ||| ');
+        const hasEastAsian = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/.test(fullText);
+        let romanizedLines = [];
+
+        if (hasEastAsian) {
+            const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q=${encodeURIComponent(fullText)}`);
+            if (!res.ok) throw new Error("Romanization request failed");
+            
+            const data = await res.json();
+            let fullRomanized = "";
+            if (data[0] && Array.isArray(data[0])) {
+                fullRomanized = data[0].map(s => s[3] || "").join('');
+            }
+            
+            romanizedLines = fullRomanized.split(/\|\s*\|\s*\|/).map(s => s.trim());
+        } else {
+            romanizedLines = lines.map(line => transliterateCyrillic(line));
+        }
+
+        if (isSynced) {
+            syncedLyrics.forEach((line, idx) => {
+                line.romanizedText = romanizedLines[idx] || line.text;
+            });
+        } else {
+            staticRomanizedLyrics = staticLyrics.map((line, idx) => romanizedLines[idx] || line);
+        }
+
+        lyricsLanguageState = 'romanized';
+        renderActiveLyricsState();
+        romanizeBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Оригінал';
+
+        const translateBtn = document.getElementById('lyrics-translate-btn');
+        if (translateBtn) translateBtn.innerHTML = '<i class="fa-solid fa-g-translate"></i> Перекласти';
+
+    } catch (err) {
+        console.error("Romanization error:", err);
+        alert("Не вдалося романізувати текст пісні.");
+    } finally {
+        romanizeBtn.disabled = false;
+        if (lyricsLanguageState !== 'romanized') {
+            romanizeBtn.innerHTML = originalText;
+        }
+    }
+}
+
+function restoreOriginalLyrics() {
+    lyricsLanguageState = 'original';
+    renderActiveLyricsState();
+    
+    const translateBtn = document.getElementById('lyrics-translate-btn');
+    if (translateBtn) translateBtn.innerHTML = '<i class="fa-solid fa-g-translate"></i> Перекласти';
+    
+    const romanizeBtn = document.getElementById('lyrics-romanize-btn');
+    if (romanizeBtn) romanizeBtn.innerHTML = '<i class="fa-solid fa-language"></i> Романізувати';
+}
+
+function renderActiveLyricsState() {
+    const lyricsText = document.getElementById('lyrics-text');
+    if (!lyricsText) return;
+    
+    let isSynced = syncedLyrics.length > 0;
+    
+    if (isSynced) {
+        const linesHtml = syncedLyrics.map((line, idx) => {
+            let displayText = line.text;
+            if (lyricsLanguageState === 'translated') {
+                displayText = line.translatedText || line.text;
+            } else if (lyricsLanguageState === 'romanized') {
+                displayText = line.romanizedText || line.text;
+            }
+            return `<div class="lyrics-line${idx === currentLyricsIndex ? ' active' : ''}" id="lyrics-line-${idx}" data-time="${line.time}">${escapeHTML(displayText)}</div>`;
+        }).join('');
+        lyricsText.innerHTML = linesHtml;
+        
+        if (currentLyricsIndex !== -1) {
+            const activeLine = document.getElementById(`lyrics-line-${currentLyricsIndex}`);
+            if (activeLine) {
+                activeLine.classList.add('active');
+                activeLine.scrollIntoView({ behavior: 'auto', block: 'center' });
+            }
+        }
+    } else {
+        let lines = staticLyrics;
+        if (lyricsLanguageState === 'translated') {
+            lines = staticTranslatedLyrics.length > 0 ? staticTranslatedLyrics : staticLyrics;
+        } else if (lyricsLanguageState === 'romanized') {
+            lines = staticRomanizedLyrics.length > 0 ? staticRomanizedLyrics : staticLyrics;
+        }
+        const linesHtml = lines.map(line => `<div class="lyrics-line">${escapeHTML(line)}</div>`).join('');
+        lyricsText.innerHTML = linesHtml;
+    }
+}
+
+function transliterateCyrillic(text) {
+    const map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'h', 'ґ': 'g', 'д': 'd', 'е': 'e', 'є': 'ye', 'ж': 'zh', 'з': 'z',
+        'и': 'y', 'і': 'i', 'ї': 'yi', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p',
+        'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+        'ь': '', 'ю': 'yu', 'я': 'ya',
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'H', 'Ґ': 'G', 'Д': 'D', 'Е': 'E', 'Є': 'Ye', 'Ж': 'Zh', 'З': 'Z',
+        'И': 'Y', 'І': 'I', 'Ї': 'Yi', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O', 'П': 'P',
+        'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+        'Ь': '', 'Ю': 'Yu', 'Я': 'Ya'
+    };
+    return text.split('').map(char => map[char] !== undefined ? map[char] : char).join('');
+}
+
+function openLyricsCardCreator() {
+    const modal = document.getElementById('lyrics-card-modal-overlay');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    modal.style.opacity = '1';
+    modal.style.pointerEvents = 'auto';
+
+    const activeTrack = currentIndex !== -1 ? activePlaylist[currentIndex] : null;
+    const previewTitle = document.getElementById('preview-title');
+    const previewArtist = document.getElementById('preview-artist');
+    const previewArtwork = document.getElementById('preview-artwork');
+
+    if (activeTrack) {
+        if (previewTitle) previewTitle.textContent = activeTrack.title;
+        if (previewArtist) previewArtist.textContent = activeTrack.channel;
+        if (previewArtwork) previewArtwork.style.backgroundImage = `url('${activeTrack.thumbnail}')`;
+    }
+
+    const selectList = document.getElementById('lyrics-card-select-list');
+    if (selectList) {
+        selectList.innerHTML = '';
+        selectedLyricCardLines = [];
+        updateLyricCardPreview();
+
+        let lines = [];
+        if (syncedLyrics.length > 0) {
+            lines = syncedLyrics.map(l => {
+                if (lyricsLanguageState === 'translated') return l.translatedText || l.text;
+                if (lyricsLanguageState === 'romanized') return l.romanizedText || l.text;
+                return l.text;
+            });
+        } else {
+            if (lyricsLanguageState === 'translated') lines = staticTranslatedLyrics.length > 0 ? staticTranslatedLyrics : staticLyrics;
+            else if (lyricsLanguageState === 'romanized') lines = staticRomanizedLyrics.length > 0 ? staticRomanizedLyrics : staticLyrics;
+            else lines = staticLyrics;
+        }
+
+        if (lines.length === 0) {
+            selectList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-top: 20px;">Текст пісні не завантажений.</p>';
+        } else {
+            lines.forEach((line, idx) => {
+                const item = document.createElement('div');
+                item.className = 'lyric-select-item';
+                item.style.padding = '8px 12px';
+                item.style.borderRadius = '8px';
+                item.style.background = 'rgba(255,255,255,0.02)';
+                item.style.border = '1px solid rgba(255,255,255,0.05)';
+                item.style.fontSize = '0.8rem';
+                item.style.color = 'var(--text-muted)';
+                item.style.cursor = 'pointer';
+                item.style.transition = 'all 0.2s';
+                item.textContent = line;
+
+                item.addEventListener('click', () => {
+                    const selectedIdx = selectedLyricCardLines.indexOf(idx);
+                    if (selectedIdx !== -1) {
+                        selectedLyricCardLines.splice(selectedIdx, 1);
+                        item.style.background = 'rgba(255,255,255,0.02)';
+                        item.style.borderColor = 'rgba(255,255,255,0.05)';
+                        item.style.color = 'var(--text-muted)';
+                    } else {
+                        if (selectedLyricCardLines.length >= 4) {
+                            alert("Можна обрати не більше 4 рядків!");
+                            return;
+                        }
+                        selectedLyricCardLines.push(idx);
+                        item.style.background = 'rgba(34, 211, 238, 0.1)';
+                        item.style.borderColor = 'var(--neon-cyan)';
+                        item.style.color = 'white';
+                    }
+                    updateLyricCardPreview();
+                });
+                selectList.appendChild(item);
+            });
+        }
+    }
+}
+
+function updateLyricCardPreview() {
+    const previewLinesContainer = document.getElementById('preview-lines-container');
+    const previewBg = document.getElementById('lyric-card-preview-bg');
+    const previewOverlay = document.getElementById('lyric-card-preview-overlay');
+    const cardBgSelect = document.getElementById('card-bg-select');
+    const cardFontSelect = document.getElementById('card-font-select');
+    
+    if (!previewLinesContainer) return;
+
+    if (selectedLyricCardLines.length === 0) {
+        previewLinesContainer.innerHTML = '«Оберіть рядки зліва...»';
+        previewLinesContainer.style.fontStyle = 'italic';
+        previewLinesContainer.style.opacity = '0.5';
+    } else {
+        previewLinesContainer.style.fontStyle = 'normal';
+        previewLinesContainer.style.opacity = '1';
+
+        let lines = [];
+        if (syncedLyrics.length > 0) {
+            lines = syncedLyrics.map(l => {
+                if (lyricsLanguageState === 'translated') return l.translatedText || l.text;
+                if (lyricsLanguageState === 'romanized') return l.romanizedText || l.text;
+                return l.text;
+            });
+        } else {
+            if (lyricsLanguageState === 'translated') lines = staticTranslatedLyrics.length > 0 ? staticTranslatedLyrics : staticLyrics;
+            else if (lyricsLanguageState === 'romanized') lines = staticRomanizedLyrics.length > 0 ? staticRomanizedLyrics : staticLyrics;
+            else lines = staticLyrics;
+        }
+
+        const sortedSelects = [...selectedLyricCardLines].sort((a, b) => a - b);
+        previewLinesContainer.innerHTML = sortedSelects.map(idx => `<div>${escapeHTML(lines[idx])}</div>`).join('');
+    }
+
+    const font = cardFontSelect ? cardFontSelect.value : 'Outfit';
+    previewLinesContainer.style.fontFamily = font;
+
+    const bgStyle = cardBgSelect ? cardBgSelect.value : 'cover';
+    const activeTrack = currentIndex !== -1 ? activePlaylist[currentIndex] : null;
+
+    if (bgStyle === 'cover' && activeTrack) {
+        if (previewBg) {
+            previewBg.style.display = 'block';
+            previewBg.style.backgroundImage = `url('${activeTrack.thumbnail}')`;
+            previewBg.style.filter = 'blur(20px) brightness(0.65)';
+        }
+        if (previewOverlay) {
+            previewOverlay.style.background = 'rgba(0,0,0,0.35)';
+        }
+    } else if (bgStyle === 'neon') {
+        if (previewBg) previewBg.style.display = 'none';
+        const docStyles = getComputedStyle(document.documentElement);
+        const pGlow = docStyles.getPropertyValue('--primary-glow').trim() || 'rgb(29, 185, 84)';
+        const sGlow = docStyles.getPropertyValue('--secondary-glow').trim() || 'rgb(34, 211, 238)';
+        if (previewOverlay) {
+            previewOverlay.style.background = `linear-gradient(135deg, rgba(${getRgbStringValues(pGlow)}, 0.8), rgba(${getRgbStringValues(sGlow)}, 0.8))`;
+        }
+    } else {
+        if (previewBg) previewBg.style.display = 'none';
+        if (previewOverlay) {
+            previewOverlay.style.background = 'linear-gradient(135deg, #08090f 0%, #161826 100%)';
+        }
+    }
+}
+
+async function downloadLyricCard() {
+    if (selectedLyricCardLines.length === 0) {
+        alert("Будь ласка, оберіть хоча б один рядок!");
+        return;
+    }
+
+    const activeTrack = currentIndex !== -1 ? activePlaylist[currentIndex] : null;
+    if (!activeTrack) return;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 800;
+    canvas.height = 800;
+
+    const bgStyle = document.getElementById('card-bg-select').value;
+    const font = document.getElementById('card-font-select').value;
+    
+    let align = 'center';
+    if (document.getElementById('align-left-btn').classList.contains('active')) align = 'left';
+    else if (document.getElementById('align-right-btn').classList.contains('active')) align = 'right';
+
+    if (bgStyle === 'cover') {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        await new Promise((resolve) => {
+            img.onload = () => {
+                ctx.save();
+                ctx.filter = 'blur(30px) brightness(0.65)';
+                ctx.drawImage(img, -100, -100, 1000, 1000);
+                ctx.restore();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fillRect(0, 0, 800, 800);
+                resolve();
+            };
+            img.onerror = () => {
+                ctx.fillStyle = '#121420';
+                ctx.fillRect(0, 0, 800, 800);
+                resolve();
+            };
+            img.src = activeTrack.thumbnail;
+        });
+    } else if (bgStyle === 'neon') {
+        const docStyles = getComputedStyle(document.documentElement);
+        const pGlow = docStyles.getPropertyValue('--primary-glow').trim() || 'rgb(29, 185, 84)';
+        const sGlow = docStyles.getPropertyValue('--secondary-glow').trim() || 'rgb(34, 211, 238)';
+        const grad = ctx.createLinearGradient(0, 0, 800, 800);
+        grad.addColorStop(0, `rgb(${getRgbStringValues(pGlow)})`);
+        grad.addColorStop(1, `rgb(${getRgbStringValues(sGlow)})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 800, 800);
+    } else {
+        const grad = ctx.createLinearGradient(0, 0, 800, 800);
+        grad.addColorStop(0, '#08090f');
+        grad.addColorStop(1, '#161826');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 800, 800);
+    }
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, 780, 780);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.font = `italic 120px Georgia, serif`;
+    ctx.fillText('“', 50, 150);
+
+    let lines = [];
+    if (syncedLyrics.length > 0) {
+        lines = syncedLyrics.map(l => {
+            if (lyricsLanguageState === 'translated') return l.translatedText || l.text;
+            if (lyricsLanguageState === 'romanized') return l.romanizedText || l.text;
+            return l.text;
+        });
+    } else {
+        if (lyricsLanguageState === 'translated') lines = staticTranslatedLyrics.length > 0 ? staticTranslatedLyrics : staticLyrics;
+        else if (lyricsLanguageState === 'romanized') lines = staticRomanizedLyrics.length > 0 ? staticRomanizedLyrics : staticLyrics;
+        else lines = staticLyrics;
+    }
+
+    const sortedSelects = [...selectedLyricCardLines].sort((a, b) => a - b);
+    const selectedTexts = sortedSelects.map(idx => lines[idx]);
+
+    ctx.fillStyle = 'white';
+    ctx.font = `600 32px ${font}, sans-serif`;
+    ctx.textBaseline = 'middle';
+
+    const startY = 400 - (selectedTexts.length * 50) / 2;
+    selectedTexts.forEach((text, i) => {
+        let x = 400;
+        ctx.textAlign = align;
+        if (align === 'left') x = 80;
+        else if (align === 'right') x = 720;
+        
+        let displayText = text;
+        const maxTextWidth = 640;
+        if (ctx.measureText(displayText).width > maxTextWidth) {
+            while (ctx.measureText(displayText + '...').width > maxTextWidth && displayText.length > 0) {
+                displayText = displayText.slice(0, -1);
+            }
+            displayText += '...';
+        }
+        ctx.fillText(displayText, x, startY + (i * 60));
+    });
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(80, 680);
+    ctx.lineTo(720, 680);
+    ctx.stroke();
+
+    const artImg = new Image();
+    artImg.crossOrigin = "Anonymous";
+    await new Promise((resolve) => {
+        artImg.onload = () => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(110, 720, 30, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(artImg, 80, 690, 60, 60);
+            ctx.restore();
+            resolve();
+        };
+        artImg.onerror = () => {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(80, 690, 60, 60);
+            resolve();
+        };
+        artImg.src = activeTrack.thumbnail;
+    });
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 22px Outfit, sans-serif';
+    
+    let titleText = activeTrack.title;
+    if (ctx.measureText(titleText).width > 400) {
+        while (ctx.measureText(titleText + '...').width > 400 && titleText.length > 0) {
+            titleText = titleText.slice(0, -1);
+        }
+        titleText += '...';
+    }
+    ctx.fillText(titleText, 160, 718);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '18px Outfit, sans-serif';
+    let artistText = activeTrack.channel;
+    if (ctx.measureText(artistText).width > 400) {
+        while (ctx.measureText(artistText + '...').width > 400 && artistText.length > 0) {
+            artistText = artistText.slice(0, -1);
+        }
+        artistText += '...';
+    }
+    ctx.fillText(artistText, 160, 745);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = 'bold 20px Orbitron, sans-serif';
+    ctx.fillText('VIBETUBE', 720, 735);
+
+    const link = document.createElement('a');
+    link.download = `${activeTrack.title.replace(/[\\/:*?"<>|]/g, "")} - Quote.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+}
+
+function initLyricsCardCreatorUI() {
+    const modal = document.getElementById('lyrics-card-modal-overlay');
+    const closeBtn = document.getElementById('lyrics-card-close-btn');
+    const cardBgSelect = document.getElementById('card-bg-select');
+    const cardFontSelect = document.getElementById('card-font-select');
+    const alignLeftBtn = document.getElementById('align-left-btn');
+    const alignCenterBtn = document.getElementById('align-center-btn');
+    const alignRightBtn = document.getElementById('align-right-btn');
+    const saveBtn = document.getElementById('lyrics-card-save-btn');
+
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.classList.remove('active');
+            modal.style.opacity = '0';
+            modal.style.pointerEvents = 'none';
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                modal.style.opacity = '0';
+                modal.style.pointerEvents = 'none';
+            }
+        });
+    }
+
+    if (cardBgSelect) {
+        cardBgSelect.addEventListener('change', updateLyricCardPreview);
+    }
+    if (cardFontSelect) {
+        cardFontSelect.addEventListener('change', updateLyricCardPreview);
+    }
+
+    const alignBtns = [alignLeftBtn, alignCenterBtn, alignRightBtn];
+    alignBtns.forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                alignBtns.forEach(b => {
+                    if (b) b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                
+                const previewLinesContainer = document.getElementById('preview-lines-container');
+                if (previewLinesContainer) {
+                    previewLinesContainer.style.textAlign = btn.dataset.align;
+                }
+            });
+        }
+    });
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', downloadLyricCard);
+    }
 }

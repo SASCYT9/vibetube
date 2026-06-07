@@ -288,8 +288,19 @@
                     </div>
                     
                     <!-- Lyrics Content -->
-                    <div class="tab-content" id="lyrics-content">
-                        <div class="lyrics-container" id="lyrics-text">
+                    <div class="tab-content" id="lyrics-content" style="position: relative; display: flex; flex-direction: column; height: 100%;">
+                        <div class="lyrics-toolbar" id="lyrics-toolbar" style="display: none; justify-content: flex-end; gap: 8px; margin-bottom: 12px; flex-shrink: 0; padding: 0 5px;">
+                            <button id="lyrics-romanize-btn" class="mode-btn" style="padding: 4px 10px; font-size: 0.72rem; border-color: rgba(255,255,255,0.1); cursor: pointer;" title="Романізація тексту (японська/корейська/кирилиця)">
+                                <i class="fa-solid fa-language"></i> Романізувати
+                            </button>
+                            <button id="lyrics-translate-btn" class="mode-btn" style="padding: 4px 10px; font-size: 0.72rem; border-color: rgba(255,255,255,0.1); cursor: pointer;" title="Перекласти текст українською">
+                                <i class="fa-solid fa-g-translate"></i> Перекласти
+                            </button>
+                            <button id="lyrics-card-btn" class="mode-btn" style="padding: 4px 10px; font-size: 0.72rem; border-color: var(--neon-cyan); background: rgba(34,211,238,0.05); color: var(--neon-cyan); cursor: pointer;" title="Створити картку з цитатою">
+                                <i class="fa-solid fa-image"></i> Картка цитати
+                            </button>
+                        </div>
+                        <div class="lyrics-container" id="lyrics-text" style="flex: 1; overflow-y: auto;">
                             <div class="empty-state">
                                 <i class="fa-solid fa-microphone-lines"></i>
                                 <p>Увімкніть трек, щоб побачити текст пісні</p>
@@ -588,6 +599,87 @@
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lyrics Card Modal Overlay -->
+    <div class="lyrics-card-modal-overlay" id="lyrics-card-modal-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(8, 9, 15, 0.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2100; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+        <div class="lyrics-card-modal card glass" style="width: 90%; max-width: 800px; max-height: 85vh; background: rgba(18, 20, 32, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 1.5rem; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--primary-glow-rgba);">
+            <div class="card-header" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h3><i class="fa-solid fa-image" style="color: var(--neon-cyan);"></i> Конструктор карток цитат</h3>
+                <button class="theme-modal-close-btn" id="lyrics-card-close-btn" title="Закрити конструктор">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="lyrics-card-body" style="display: flex; gap: 20px; flex: 1; min-height: 0; overflow: hidden;">
+                <!-- Left: Line selector -->
+                <div class="lyrics-select-col" style="flex: 1.2; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid rgba(255,255,255,0.05); padding-right: 20px;">
+                    <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-main);">1. Оберіть рядки тексту (макс. 4)</h4>
+                    <div id="lyrics-card-select-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px;">
+                        <!-- Lines loaded here -->
+                    </div>
+                </div>
+
+                <!-- Right: Preview & Style Settings -->
+                <div class="lyrics-preview-col" style="flex: 1; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-right: 5px;">
+                    <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: var(--text-main);">2. Налаштування стилю & Перегляд</h4>
+                    
+                    <!-- Live Preview Div -->
+                    <div id="lyric-card-preview" style="width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;">
+                        <!-- Blur cover overlay -->
+                        <div id="lyric-card-preview-bg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background-size: cover; background-position: center; filter: blur(20px) brightness(0.65);"></div>
+                        <div id="lyric-card-preview-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; background: rgba(0,0,0,0.25);"></div>
+                        
+                        <!-- Content -->
+                        <div id="lyric-card-preview-content" style="position: relative; z-index: 3; color: white; display: flex; flex-direction: column; gap: 12px; width: 100%; height: 100%; justify-content: space-between;">
+                            <div style="font-size: 1.2rem; line-height: 1.5; text-shadow: 0 2px 10px rgba(0,0,0,0.8); word-break: break-word; font-weight: 600; flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center;" id="preview-lines-container">
+                                «Оберіть рядки зліва...»
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px; flex-shrink: 0;" id="preview-meta-container">
+                                <div id="preview-artwork" style="width: 36px; height: 36px; border-radius: 6px; background-size: cover; background-position: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"></div>
+                                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left;">
+                                    <span id="preview-title" style="font-size: 0.8rem; font-weight: bold; text-shadow: 0 1px 5px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Назва пісні</span>
+                                    <span id="preview-artist" style="font-size: 0.7rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 5px rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Виконавець</span>
+                                </div>
+                                <span style="font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 1px; opacity: 0.7; font-weight: bold; color: var(--primary-glow);">VIBETUBE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Style choices -->
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Задній фон</label>
+                            <select id="card-bg-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 0.8rem; cursor: pointer;">
+                                <option value="cover" selected>Обкладинка треку (Розмито)</option>
+                                <option value="neon">Неоновий акцент теми</option>
+                                <option value="dark">Темна ніч (Глибокий синій)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Шрифт тексту</label>
+                            <select id="card-font-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 0.8rem; cursor: pointer;">
+                                <option value="Outfit" selected>Outfit (Модерн)</option>
+                                <option value="Orbitron">Orbitron (Футуристичний)</option>
+                                <option value="Georgia">Georgia (Класичний романтичний)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Вирівнювання</label>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="mode-btn active" data-align="center" style="flex: 1; padding: 6px;" id="align-center-btn"><i class="fa-solid fa-align-center"></i></button>
+                                <button class="mode-btn" data-align="left" style="flex: 1; padding: 6px;" id="align-left-btn"><i class="fa-solid fa-align-left"></i></button>
+                                <button class="mode-btn" data-align="right" style="flex: 1; padding: 6px;" id="align-right-btn"><i class="fa-solid fa-align-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="lyrics-card-save-btn" class="mode-btn" style="margin-top: 5px; width: 100%; border: 1px solid var(--neon-cyan); background: rgba(34, 211, 238, 0.08); color: var(--text-main); font-size: 0.85rem; padding: 10px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+                        <i class="fa-solid fa-download"></i> Завантажити картку
+                    </button>
                 </div>
             </div>
         </div>
