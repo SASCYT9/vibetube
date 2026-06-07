@@ -1286,6 +1286,10 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     transition: var(--transition);
 }
 
+.lyrics-line[data-time] {
+    cursor: pointer;
+}
+
 .lyrics-line:hover {
     opacity: 1;
     color: var(--neon-cyan);

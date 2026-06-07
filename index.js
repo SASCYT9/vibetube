@@ -674,6 +674,22 @@ function setupEventListeners() {
     setupHoverPreResolution('results-list', () => currentPlaylist);
     setupHoverPreResolution('history-list', () => historyPlaylist);
     setupHoverPreResolution('account-list', () => accountPlaylist);
+
+    // Synced lyrics click-to-seek delegation listener
+    const lyricsTextElement = document.getElementById('lyrics-text');
+    if (lyricsTextElement) {
+        lyricsTextElement.addEventListener('click', (e) => {
+            const line = e.target.closest('.lyrics-line');
+            if (line && line.dataset.time) {
+                const time = parseFloat(line.dataset.time);
+                if (!isNaN(time)) {
+                    audio.currentTime = time;
+                    updateProgress();
+                    updateDiscordPresence();
+                }
+            }
+        });
+    }
 }
 
 // Switch between Search results, History, and Account tabs
