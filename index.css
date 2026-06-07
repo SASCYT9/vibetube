@@ -578,6 +578,13 @@ body {
     transform: translateY(-1px);
 }
 
+.mode-btn.active {
+    background: rgba(34, 211, 238, 0.1);
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.2);
+}
+
 /* Settings panel / Equalizer Card */
 .settings-panel {
     display: flex;
@@ -2275,6 +2282,117 @@ body.mini-player-active #mini-player-btn {
 .theme-preset-btn.active {
     color: var(--text-main);
     box-shadow: 0 4px 15px rgba(255, 255, 255, 0.05);
+}
+
+/* Sleep Timer Modal Overlay */
+.sleep-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(8, 9, 15, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.sleep-modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sleep-modal {
+    width: 90%;
+    max-width: 400px;
+    background: rgba(18, 20, 32, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(34, 211, 238, 0.25);
+    border-radius: 24px;
+    padding: 2rem;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sleep-modal-overlay.active .sleep-modal {
+    transform: translateY(0);
+}
+
+.sleep-modal-close-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sleep-modal-close-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.sleep-option-btn {
+    width: 100%;
+    text-align: center;
+    padding: 0.75rem;
+    font-size: 0.95rem;
+}
+
+/* Search Platform Switcher */
+.platform-switcher {
+    display: flex;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 30px;
+    padding: 2px;
+    margin-left: 10px;
+    margin-right: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    align-items: center;
+}
+
+.platform-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.platform-btn:hover {
+    color: var(--text-main);
+}
+
+.platform-btn.active#platform-yt-btn {
+    background: #ff0000;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+}
+
+.platform-btn.active#platform-sc-btn {
+    background: #ff5500;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(255, 85, 0, 0.4);
 }
 
 

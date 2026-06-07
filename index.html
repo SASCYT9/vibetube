@@ -39,7 +39,15 @@
             <div class="search-container">
                 <div class="search-bar">
                     <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" id="search-input" placeholder="Введіть назву пісні, виконавця або лінк..." autocomplete="off">
+                    <div class="platform-switcher" id="platform-switcher">
+                        <button class="platform-btn active" id="platform-yt-btn" data-platform="youtube" title="Пошук в YouTube">
+                            <i class="fa-brands fa-youtube"></i>
+                        </button>
+                        <button class="platform-btn" id="platform-sc-btn" data-platform="soundcloud" title="Пошук в SoundCloud">
+                            <i class="fa-brands fa-soundcloud"></i>
+                        </button>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Введіть назву пісні, виконавця або лінк з YouTube..." autocomplete="off">
                     <i class="fa-solid fa-xmark search-clear-icon" id="search-clear-btn" style="display: none; cursor: pointer; color: var(--text-muted); margin-right: 12px; font-size: 1.1rem; transition: color 0.2s;"></i>
                     <button id="search-btn">Пошук</button>
                     <div class="search-suggestions" id="search-suggestions" style="display: none;"></div>
@@ -174,6 +182,9 @@
                             </button>
                             <button id="fullscreen-btn" class="mode-btn" title="Повний екран ілюмінацій">
                                 <i class="fa-solid fa-expand"></i> Повний екран
+                            </button>
+                            <button id="sleep-timer-btn" class="mode-btn" title="Таймер сну">
+                                <i class="fa-solid fa-clock"></i> <span id="sleep-timer-text">Таймер сну</span>
                             </button>
                         </div>
                     </div>
@@ -470,6 +481,28 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Sleep Timer Modal Overlay -->
+    <div class="sleep-modal-overlay" id="sleep-modal-overlay">
+        <div class="sleep-modal card glass">
+            <div class="card-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h3><i class="fa-solid fa-clock" style="color: var(--neon-cyan);"></i> Таймер сну</h3>
+                <button class="sleep-modal-close-btn" id="sleep-timer-close-btn" title="Закрити таймер сну">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="sleep-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <button class="preset-btn sleep-option-btn active" data-minutes="off">Вимкнено</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="5">5 хвилин</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="15">15 хвилин</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="30">30 хвилин</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="45">45 хвилин</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="60">1 година</button>
+                <button class="preset-btn sleep-option-btn" data-minutes="120">2 години</button>
+            </div>
+            <div id="sleep-status-text" style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem; color: var(--neon-cyan); font-family: 'Orbitron', sans-serif; min-height: 20px;"></div>
         </div>
     </div>
 

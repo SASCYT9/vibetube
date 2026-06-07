@@ -21,6 +21,12 @@ let userPlaylists = [];
 let recentSearches = JSON.parse(localStorage.getItem('vibetube_recent_searches') || '[]');
 let activeSuggestionIndex = -1;
 
+// Search Platform & Sleep Timer state
+let searchPlatform = 'youtube';
+let sleepTimer = null;
+let sleepTimeRemaining = 0;
+let sleepInterval = null;
+
 // Theme Customization Variables
 let themeMode = 'auto'; // 'auto', 'system', 'manual'
 let lastManualColor = '#1db954';
@@ -87,6 +93,16 @@ const playlistsSelectionView = document.getElementById('playlists-selection-view
 const playlistNavHeader = document.getElementById('playlist-nav-header');
 const activePlaylistName = document.getElementById('active-playlist-name');
 const accountBackBtn = document.getElementById('account-back-btn');
+
+// Sleep Timer & Platform Selector DOM elements
+const sleepTimerBtn = document.getElementById('sleep-timer-btn');
+const sleepModalOverlay = document.getElementById('sleep-modal-overlay');
+const sleepTimerCloseBtn = document.getElementById('sleep-timer-close-btn');
+const sleepOptionBtns = document.querySelectorAll('.sleep-option-btn');
+const sleepStatusText = document.getElementById('sleep-status-text');
+const sleepTimerText = document.getElementById('sleep-timer-text');
+const platformYtBtn = document.getElementById('platform-yt-btn');
+const platformScBtn = document.getElementById('platform-sc-btn');
 const eqModalOverlay = document.getElementById('eq-modal-overlay');
 const eqToggleBtn = document.getElementById('eq-toggle-btn');
 const eqModalCloseBtn = document.getElementById('eq-modal-close-btn');
@@ -690,6 +706,132 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Platform Switcher event listeners
+    if (platformYtBtn && platformScBtn) {
+        platformYtBtn.addEventListener('click', () => {
+            searchPlatform = 'youtube';
+            platformYtBtn.classList.add('active');
+            platformScBtn.classList.remove('active');
+            searchInput.placeholder = "Введіть назву пісні, виконавця або лінк з YouTube...";
+        });
+
+        platformScBtn.addEventListener('click', () => {
+            searchPlatform = 'soundcloud';
+            platformYtBtn.classList.remove('active');
+            platformScBtn.classList.add('active');
+            searchInput.placeholder = "Введіть назву пісні, виконавця або лінк з SoundCloud...";
+        });
+    }
+
+    // Sleep Timer Modal event listeners
+    if (sleepTimerBtn) {
+        sleepTimerBtn.addEventListener('click', () => {
+            sleepModalOverlay.classList.add('active');
+        });
+    }
+
+    if (sleepTimerCloseBtn) {
+        sleepTimerCloseBtn.addEventListener('click', () => {
+            sleepModalOverlay.classList.remove('active');
+        });
+    }
+
+    if (sleepModalOverlay) {
+        sleepModalOverlay.addEventListener('click', (e) => {
+            if (e.target === sleepModalOverlay) {
+                sleepModalOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sleepModalOverlay && sleepModalOverlay.classList.contains('active')) {
+            sleepModalOverlay.classList.remove('active');
+        }
+    });
+
+    // Sleep options selection
+    sleepOptionBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            sleepOptionBtns.forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+
+            const val = e.currentTarget.dataset.minutes;
+            setSleepTimer(val);
+        });
+    });
+}
+
+// Sleep Timer Action logic
+function setSleepTimer(value) {
+    if (sleepInterval) {
+        clearInterval(sleepInterval);
+        sleepInterval = null;
+    }
+
+    if (value === 'off') {
+        sleepTimeRemaining = 0;
+        if (sleepTimerBtn) {
+            sleepTimerBtn.classList.remove('active');
+            sleepTimerText.textContent = "Таймер сну";
+        }
+        if (sleepStatusText) {
+            sleepStatusText.textContent = "Таймер сну вимкнено";
+        }
+        return;
+    }
+
+    const minutes = parseInt(value);
+    if (isNaN(minutes)) return;
+
+    sleepTimeRemaining = minutes * 60;
+    if (sleepTimerBtn) {
+        sleepTimerBtn.classList.add('active');
+    }
+    
+    updateSleepStatusUI();
+
+    sleepInterval = setInterval(() => {
+        sleepTimeRemaining--;
+        if (sleepTimeRemaining <= 0) {
+            clearInterval(sleepInterval);
+            sleepInterval = null;
+            
+            // Pause playback
+            audio.pause();
+            isPlaying = false;
+            playIcon.className = 'fa-solid fa-play';
+            const fsPlayIcon = document.querySelector('#fs-play-btn i');
+            if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-play';
+            if (trackArtwork) trackArtwork.classList.remove('playing');
+            fetch('/api/mpris_update?status=Paused').catch(err => console.error(err));
+            updateDiscordPresence();
+            
+            setSleepTimer('off');
+            
+            // Re-active "off" option button
+            sleepOptionBtns.forEach(b => {
+                if (b.dataset.minutes === 'off') b.classList.add('active');
+                else b.classList.remove('active');
+            });
+        } else {
+            updateSleepStatusUI();
+        }
+    }, 1000);
+}
+
+function updateSleepStatusUI() {
+    const mins = Math.floor(sleepTimeRemaining / 60);
+    const secs = sleepTimeRemaining % 60;
+    const formattedTime = `${mins}:${secs.toString().padStart(2, '0')}`;
+    
+    if (sleepStatusText) {
+        sleepStatusText.textContent = `Плеєр зупиниться через: ${formattedTime}`;
+    }
+    if (sleepTimerText) {
+        sleepTimerText.textContent = `Сон: ${formattedTime}`;
+    }
 }
 
 // Switch between Search results, History, and Account tabs
@@ -897,7 +1039,11 @@ async function performSearch() {
     searchBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>...';
 
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        let finalQuery = query;
+        if (searchPlatform === 'soundcloud' && !query.startsWith('http://') && !query.startsWith('https://') && !query.toLowerCase().startsWith('sc:') && !query.toLowerCase().startsWith('soundcloud:')) {
+            finalQuery = 'sc:' + query;
+        }
+        const response = await fetch(`/api/search?q=${encodeURIComponent(finalQuery)}`);
         if (!response.ok) throw new Error("Search server error");
         
         const results = await response.json();
