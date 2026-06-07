@@ -214,16 +214,30 @@
 
                     <!-- History List Content -->
                     <div class="tab-content" id="history-content">
-                        <div class="history-sync-wrapper" style="padding: 0.75rem; display: flex; justify-content: center; border-bottom: 1px solid var(--border-color);">
-                            <button class="mode-btn" id="load-yt-history-btn" style="width: 100%; max-width: 250px; font-size: 0.9rem; padding: 0.5rem 1rem;">
-                                <i class="fa-brands fa-youtube" style="color: #ef4444;"></i> Синхронізувати з YouTube
-                            </button>
+                        <!-- History Sub-Tabs -->
+                        <div class="history-sub-tabs" style="display: flex; gap: 10px; padding: 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 10px;">
+                            <button class="tab-btn active" id="sub-tab-history-tracks" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); cursor: pointer; flex: 1;"><i class="fa-solid fa-clock"></i> Нещодавні треки</button>
+                            <button class="tab-btn" id="sub-tab-history-stats" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); cursor: pointer; flex: 1;"><i class="fa-solid fa-chart-line"></i> Статистика</button>
                         </div>
-                        <div class="empty-state" id="history-empty">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
-                            <p>Тут з'являться ваші нещодавні треки або історія з YouTube</p>
+
+                        <!-- Sub-tab 1: Recent Tracks -->
+                        <div id="history-tracks-view">
+                            <div class="history-sync-wrapper" style="padding: 0.75rem; display: flex; justify-content: center; border-bottom: 1px solid var(--border-color);">
+                                <button class="mode-btn" id="load-yt-history-btn" style="width: 100%; max-width: 250px; font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                    <i class="fa-brands fa-youtube" style="color: #ef4444;"></i> Синхронізувати з YouTube
+                                </button>
+                            </div>
+                            <div class="empty-state" id="history-empty">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <p>Тут з'являться ваші нещодавні треки або історія з YouTube</p>
+                            </div>
+                            <div class="results-list" id="history-list"></div>
                         </div>
-                        <div class="results-list" id="history-list"></div>
+
+                        <!-- Sub-tab 2: Stats -->
+                        <div id="history-stats-view" style="display: none; padding: 0.5rem;">
+                            <!-- Listening Stats content will go here -->
+                        </div>
                     </div>
 
                     <!-- My YouTube Account Content -->
@@ -298,14 +312,8 @@
             </div>
 
             <!-- Presets Selector -->
-            <div class="presets-container">
-                <button class="preset-btn active" data-preset="flat">Flat</button>
-                <button class="preset-btn" data-preset="bass">Bass Boost</button>
-                <button class="preset-btn" data-preset="vocal">Vocal Boost</button>
-                <button class="preset-btn" data-preset="pop">Pop</button>
-                <button class="preset-btn" data-preset="rock">Rock</button>
-                <button class="preset-btn" data-preset="jazz">Jazz</button>
-                <button class="preset-btn" data-preset="electronic">Electronic</button>
+            <div class="presets-container" id="presets-container">
+                <!-- Preset buttons will be loaded here dynamically -->
             </div>
 
             <!-- Equalizer Sliders -->
@@ -478,6 +486,31 @@
                     <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
                         <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-sun"></i> Яскравість неону: <span id="theme-glow-val">100%</span></span>
                         <input type="range" id="theme-glow-slider" min="0" max="200" step="5" value="100" style="flex: 1; accent-color: var(--primary-glow);">
+                    </div>
+                </div>
+            </div>
+
+            <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+
+            <!-- Visualizer settings section -->
+            <div class="theme-section">
+                <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-chart-simple text-cyan"></i> Налаштування Візуалізатора</h4>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-drum"></i> Чутливість басу: <span id="viz-sens-val">1.0x</span></span>
+                        <input type="range" id="viz-sens-slider" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1; accent-color: var(--primary-glow);">
+                    </div>
+                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-wave-square"></i> Плавність: <span id="viz-smooth-val">80%</span></span>
+                        <input type="range" id="viz-smooth-slider" min="50" max="95" step="5" value="80" style="flex: 1; accent-color: var(--primary-glow);">
+                    </div>
+                    <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 5px;">
+                        <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 150px;"><i class="fa-solid fa-brush"></i> Колірна схема:</span>
+                        <select id="viz-color-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; cursor: pointer; flex: 1; max-width: 200px;">
+                            <option value="accent" selected>Колір теми (Акцентний)</option>
+                            <option value="rainbow">Веселковий градієнт</option>
+                            <option value="monochrome">Монохромний (Білий)</option>
+                        </select>
                     </div>
                 </div>
             </div>

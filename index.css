@@ -2395,6 +2395,29 @@ body.mini-player-active #mini-player-btn {
     box-shadow: 0 0 8px rgba(255, 85, 0, 0.4);
 }
 
+/* History Sub-tabs Capsule Styling */
+.history-sub-tabs .tab-btn {
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    color: var(--text-muted) !important;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.history-sub-tabs .tab-btn:hover {
+    color: var(--text-main) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.history-sub-tabs .tab-btn.active {
+    background: rgba(34, 211, 238, 0.1) !important;
+    color: var(--neon-cyan) !important;
+    border-color: var(--neon-cyan) !important;
+    border-bottom: 1px solid var(--neon-cyan) !important;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.15) !important;
+}
+
 
 
 

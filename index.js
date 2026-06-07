@@ -26,6 +26,12 @@ let searchPlatform = 'youtube';
 let sleepTimer = null;
 let sleepTimeRemaining = 0;
 let sleepInterval = null;
+let customEQPresets = JSON.parse(localStorage.getItem('vibetube_custom_eq_presets') || '{}');
+
+// Visualizer Settings state
+let vizBassSensitivity = 1.0;
+let vizSmoothing = 0.8;
+let vizColorMode = 'accent'; // 'accent', 'rainbow', 'monochrome'
 
 // Theme Customization Variables
 let themeMode = 'auto'; // 'auto', 'system', 'manual'
@@ -103,6 +109,19 @@ const sleepStatusText = document.getElementById('sleep-status-text');
 const sleepTimerText = document.getElementById('sleep-timer-text');
 const platformYtBtn = document.getElementById('platform-yt-btn');
 const platformScBtn = document.getElementById('platform-sc-btn');
+
+// History Sub-tabs DOM elements
+const subTabHistoryTracks = document.getElementById('sub-tab-history-tracks');
+const subTabHistoryStats = document.getElementById('sub-tab-history-stats');
+const historyTracksView = document.getElementById('history-tracks-view');
+const historyStatsView = document.getElementById('history-stats-view');
+
+// Visualizer Settings DOM elements
+const vizSensSlider = document.getElementById('viz-sens-slider');
+const vizSensVal = document.getElementById('viz-sens-val');
+const vizSmoothSlider = document.getElementById('viz-smooth-slider');
+const vizSmoothVal = document.getElementById('viz-smooth-val');
+const vizColorSelect = document.getElementById('viz-color-select');
 const eqModalOverlay = document.getElementById('eq-modal-overlay');
 const eqToggleBtn = document.getElementById('eq-toggle-btn');
 const eqModalCloseBtn = document.getElementById('eq-modal-close-btn');
@@ -201,6 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
     // Load saved Equalizer from localStorage
     loadEQSettings();
+    // Load visualizer settings from localStorage
+    loadVisualizerSettings();
     // Load liked tracks
     loadLikedTracks();
     // Resize visualizer canvas
@@ -308,6 +329,7 @@ function setupEventListeners() {
     audio.addEventListener('ended', handleTrackEnded);
     audio.addEventListener('play', () => {
         isPlaying = true;
+        window.lastStatsTickTime = Date.now();
         playIcon.className = 'fa-solid fa-pause';
         const fsPlayIcon = document.querySelector('#fs-play-btn i');
         if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-pause';
@@ -322,6 +344,7 @@ function setupEventListeners() {
     });
     audio.addEventListener('pause', () => {
         isPlaying = false;
+        window.lastStatsTickTime = null;
         playIcon.className = 'fa-solid fa-play';
         const fsPlayIcon = document.querySelector('#fs-play-btn i');
         if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-play';
@@ -491,17 +514,6 @@ function setupEventListeners() {
             
             // Save values
             saveEQSettings();
-        });
-    });
-
-    // Equalizer Presets click
-    presetBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const presetName = e.target.dataset.preset;
-            applyPreset(presetName);
-            
-            presetBtns.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
         });
     });
 
@@ -761,6 +773,56 @@ function setupEventListeners() {
             setSleepTimer(val);
         });
     });
+
+    // Visualizer settings listeners
+    if (vizSensSlider) {
+        vizSensSlider.addEventListener('input', (e) => {
+            vizBassSensitivity = parseFloat(e.target.value);
+            if (vizSensVal) {
+                vizSensVal.textContent = vizBassSensitivity.toFixed(1) + 'x';
+            }
+            saveVisualizerSettings();
+        });
+    }
+
+    if (vizSmoothSlider) {
+        vizSmoothSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            vizSmoothing = val / 100;
+            if (vizSmoothVal) {
+                vizSmoothVal.textContent = val + '%';
+            }
+            if (analyser) {
+                analyser.smoothingTimeConstant = vizSmoothing;
+            }
+            saveVisualizerSettings();
+        });
+    }
+
+    if (vizColorSelect) {
+        vizColorSelect.addEventListener('change', (e) => {
+            vizColorMode = e.target.value;
+            saveVisualizerSettings();
+        });
+    }
+
+    // History Sub-tabs event listeners
+    if (subTabHistoryTracks && subTabHistoryStats) {
+        subTabHistoryTracks.addEventListener('click', () => {
+            subTabHistoryTracks.classList.add('active');
+            subTabHistoryStats.classList.remove('active');
+            if (historyTracksView) historyTracksView.style.display = 'block';
+            if (historyStatsView) historyStatsView.style.display = 'none';
+        });
+
+        subTabHistoryStats.addEventListener('click', () => {
+            subTabHistoryTracks.classList.remove('active');
+            subTabHistoryStats.classList.add('active');
+            if (historyTracksView) historyTracksView.style.display = 'none';
+            if (historyStatsView) historyStatsView.style.display = 'block';
+            renderListeningStats();
+        });
+    }
 }
 
 // Sleep Timer Action logic
@@ -1432,6 +1494,7 @@ function activePlaylistReference() {
 async function playTrack(track, index, playlist) {
     // Initialize Web Audio API on first play
     initAudio();
+    updateTrackPlayStats(track);
 
     activePlaylist = playlist;
     currentIndex = index;
@@ -1745,6 +1808,24 @@ function updateProgress() {
         window._lastSavedTime = currentRounded;
         localStorage.setItem('vibetube_last_time', current.toString());
     }
+
+    // Update total listening time statistics
+    if (isPlaying && window.lastStatsTickTime) {
+        const now = Date.now();
+        const deltaSec = (now - window.lastStatsTickTime) / 1000;
+        if (deltaSec > 0 && deltaSec < 4) { // ignore seeks
+            const stats = JSON.parse(localStorage.getItem('vibetube_listening_stats') || '{"totalPlaybacks":0,"totalSeconds":0,"tracks":{},"channels":{}}');
+            if (stats.totalSeconds === undefined) stats.totalSeconds = 0;
+            stats.totalSeconds += deltaSec;
+            localStorage.setItem('vibetube_listening_stats', JSON.stringify(stats));
+            
+            // Live update stats display if the stats tab is active
+            if (subTabHistoryStats && subTabHistoryStats.classList.contains('active') && historyStatsView && historyStatsView.style.display === 'block') {
+                renderListeningStats();
+            }
+        }
+        window.lastStatsTickTime = now;
+    }
     
     const duration = audio.duration;
     const percentage = (current / duration) * 100;
@@ -1871,6 +1952,7 @@ function initAudio() {
     // Setup Analyser
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = vizSmoothing;
     
     // Connect dry path
     lastNode.connect(reverbDryGain);
@@ -1898,7 +1980,10 @@ function initAudio() {
 
 // Apply Equalizer Preset
 function applyPreset(name) {
-    const gains = PRESETS[name];
+    let gains = PRESETS[name];
+    if (!gains && customEQPresets[name]) {
+        gains = customEQPresets[name];
+    }
     if (!gains) return;
     
     gains.forEach((gain, i) => {
@@ -2015,10 +2100,22 @@ function startVisualizer() {
         const width = canvas.width;
         const height = canvas.height;
         
+        frameCount++;
+        
         // Get theme colors dynamically
         const docStyles = getComputedStyle(document.documentElement);
-        const primaryColor = docStyles.getPropertyValue('--primary-glow').trim() || '#1db954';
-        const secondaryColor = docStyles.getPropertyValue('--secondary-glow').trim() || '#1ed760';
+        let primaryColor = docStyles.getPropertyValue('--primary-glow').trim() || '#1db954';
+        let secondaryColor = docStyles.getPropertyValue('--secondary-glow').trim() || '#1ed760';
+
+        // Override colors based on vizColorMode
+        if (vizColorMode === 'monochrome') {
+            primaryColor = '#ffffff';
+            secondaryColor = '#888888';
+        } else if (vizColorMode === 'rainbow') {
+            const hue = (frameCount) % 360;
+            primaryColor = `hsl(${hue}, 100%, 50%)`;
+            secondaryColor = `hsl(${(hue + 60) % 360}, 100%, 50%)`;
+        }
         
         // Draw trailing background (Spotify dark gray-black tint)
         canvasCtx.fillStyle = 'rgba(12, 12, 14, 0.25)';
@@ -2035,19 +2132,19 @@ function startVisualizer() {
             bassSum += bassArray[i] || 0;
         }
         let avgBass = bassSum / 4;
-        let bassPercent = avgBass / 255; // 0.0 to 1.0
+        let bassPercent = Math.min(1.0, (avgBass / 255) * vizBassSensitivity); // 0.0 to 1.0 clamped
 
         // Dynamic box shadow pulse on the visualizer container
         const container = document.querySelector('.visualizer-container');
         if (container) {
             const shadowIntensity = bassPercent * 30;
-            container.style.boxShadow = `0 0 ${shadowIntensity}px rgba(29, 185, 84, ${bassPercent * 0.45})`;
+            container.style.boxShadow = `0 0 ${shadowIntensity}px rgba(${getRgbStringValues(primaryColor)}, ${bassPercent * 0.45})`;
             
             // Subtle dynamic scaling of the artwork card!
             const artwork = document.getElementById('track-artwork');
             if (artwork && isPlaying) {
                 artwork.style.transform = `scale(${1 + bassPercent * 0.04})`;
-                artwork.style.boxShadow = `0 12px 40px rgba(0, 0, 0, 0.6), 0 0 ${10 + bassPercent * 30}px rgba(29, 185, 84, ${0.1 + bassPercent * 0.35})`;
+                artwork.style.boxShadow = `0 12px 40px rgba(0, 0, 0, 0.6), 0 0 ${10 + bassPercent * 30}px rgba(${getRgbStringValues(primaryColor)}, ${0.1 + bassPercent * 0.35})`;
             } else if (artwork) {
                 artwork.style.transform = '';
                 artwork.style.boxShadow = '';
@@ -2075,9 +2172,20 @@ function startVisualizer() {
                 const x = i * barWidth;
                 
                 const gradient = canvasCtx.createLinearGradient(0, height, 0, height - barHeight);
-                gradient.addColorStop(0, '#00ff00');   // green
-                gradient.addColorStop(0.65, '#ffff00'); // yellow
-                gradient.addColorStop(1, '#ff0000');    // red
+                if (vizColorMode === 'monochrome') {
+                    gradient.addColorStop(0, '#333333');
+                    gradient.addColorStop(0.65, '#888888');
+                    gradient.addColorStop(1, '#ffffff');
+                } else if (vizColorMode === 'rainbow') {
+                    const hue = (frameCount + i * 10) % 360;
+                    gradient.addColorStop(0, `hsl(${hue}, 100%, 30%)`);
+                    gradient.addColorStop(0.65, `hsl(${(hue + 60) % 360}, 100%, 50%)`);
+                    gradient.addColorStop(1, `hsl(${(hue + 120) % 360}, 100%, 70%)`);
+                } else {
+                    gradient.addColorStop(0, `rgba(${getRgbStringValues(primaryColor)}, 0.2)`);
+                    gradient.addColorStop(0.65, `rgba(${getRgbStringValues(secondaryColor)}, 0.6)`);
+                    gradient.addColorStop(1, primaryColor);
+                }
                 
                 canvasCtx.fillStyle = gradient;
                 canvasCtx.fillRect(x + 3, height - barHeight, barWidth - 6, barHeight);
@@ -2501,15 +2609,10 @@ function loadEQSettings() {
     const savedEQ = localStorage.getItem('vibetube_eq_gains');
     const savedPreset = localStorage.getItem('vibetube_eq_preset');
     
+    renderEQPresets();
+    
     if (savedPreset) {
         applyPreset(savedPreset);
-        presetBtns.forEach(b => {
-            if (b.dataset.preset === savedPreset) {
-                b.classList.add('active');
-            } else {
-                b.classList.remove('active');
-            }
-        });
     } else if (savedEQ) {
         try {
             const eq = JSON.parse(savedEQ);
@@ -2518,11 +2621,175 @@ function loadEQSettings() {
                 const sign = gain > 0 ? '+' : '';
                 eqValues[i].textContent = `${sign}${gain.toFixed(1)}dB`;
             });
-            // remove active from presets since loaded slider-by-slider
-            presetBtns.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
         } catch (e) {
             console.error("Failed loading EQ from local storage", e);
         }
+    }
+}
+
+function renderEQPresets() {
+    const container = document.getElementById('presets-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const defaultPresets = [
+        { id: 'flat', label: 'Flat' },
+        { id: 'bass', label: 'Bass Boost' },
+        { id: 'vocal', label: 'Vocal Boost' },
+        { id: 'pop', label: 'Pop' },
+        { id: 'rock', label: 'Rock' },
+        { id: 'jazz', label: 'Jazz' },
+        { id: 'electronic', label: 'Electronic' }
+    ];
+
+    defaultPresets.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.dataset.preset = p.id;
+        btn.textContent = p.label;
+        
+        const savedPreset = localStorage.getItem('vibetube_eq_preset');
+        if (savedPreset === p.id) {
+            btn.classList.add('active');
+        } else if (!savedPreset && p.id === 'flat') {
+            btn.classList.add('active');
+        }
+
+        btn.addEventListener('click', () => {
+            applyPreset(p.id);
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+        container.appendChild(btn);
+    });
+
+    Object.keys(customEQPresets).forEach(name => {
+        const btnWrapper = document.createElement('div');
+        btnWrapper.className = 'custom-preset-wrapper';
+        btnWrapper.style.display = 'inline-flex';
+        btnWrapper.style.alignItems = 'center';
+        btnWrapper.style.gap = '2px';
+
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.dataset.preset = name;
+        btn.textContent = name;
+        
+        const savedPreset = localStorage.getItem('vibetube_eq_preset');
+        if (savedPreset === name) {
+            btn.classList.add('active');
+        }
+
+        btn.addEventListener('click', () => {
+            applyPreset(name);
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'preset-delete-btn';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        delBtn.style.background = 'transparent';
+        delBtn.style.border = 'none';
+        delBtn.style.color = 'var(--text-muted)';
+        delBtn.style.cursor = 'pointer';
+        delBtn.style.padding = '0 6px';
+        delBtn.style.fontSize = '0.75rem';
+        delBtn.style.height = '100%';
+        delBtn.style.transition = 'color 0.2s';
+        delBtn.title = "Видалити пресет";
+        
+        delBtn.addEventListener('mouseenter', () => delBtn.style.color = '#ef4444');
+        delBtn.addEventListener('mouseleave', () => delBtn.style.color = 'var(--text-muted)');
+
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm(`Ви впевнені, що хочете видалити пресет "${name}"?`)) {
+                delete customEQPresets[name];
+                localStorage.setItem('vibetube_custom_eq_presets', JSON.stringify(customEQPresets));
+                
+                const saved = localStorage.getItem('vibetube_eq_preset');
+                if (saved === name) {
+                    localStorage.removeItem('vibetube_eq_preset');
+                    applyPreset('flat');
+                }
+                renderEQPresets();
+            }
+        });
+
+        btnWrapper.appendChild(btn);
+        btnWrapper.appendChild(delBtn);
+        container.appendChild(btnWrapper);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'preset-btn';
+    saveBtn.id = 'save-custom-eq-btn';
+    saveBtn.style.borderColor = 'var(--neon-cyan)';
+    saveBtn.style.color = 'var(--neon-cyan)';
+    saveBtn.style.background = 'rgba(34, 211, 238, 0.05)';
+    saveBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Зберегти';
+    saveBtn.title = "Зберегти поточні повзунки як пресет";
+
+    saveBtn.addEventListener('click', () => {
+        const name = prompt("Введіть назву для вашого еквалайзер-пресету:");
+        if (name && name.trim()) {
+            const cleanName = name.trim();
+            if (cleanName.toLowerCase() === 'flat' || cleanName.toLowerCase() === 'bass' || cleanName.toLowerCase() === 'vocal' || cleanName.toLowerCase() === 'pop' || cleanName.toLowerCase() === 'rock' || cleanName.toLowerCase() === 'jazz' || cleanName.toLowerCase() === 'electronic') {
+                alert("Ця назва зарезервована для стандартних пресетів.");
+                return;
+            }
+            
+            const gains = [];
+            eqSliders.forEach(slider => {
+                gains.push(parseFloat(slider.value));
+            });
+
+            customEQPresets[cleanName] = gains;
+            localStorage.setItem('vibetube_custom_eq_presets', JSON.stringify(customEQPresets));
+            localStorage.setItem('vibetube_eq_preset', cleanName);
+            
+            renderEQPresets();
+        }
+    });
+
+    container.appendChild(saveBtn);
+}
+
+function saveVisualizerSettings() {
+    const settings = {
+        bassSensitivity: vizBassSensitivity,
+        smoothing: vizSmoothing,
+        colorMode: vizColorMode
+    };
+    localStorage.setItem('vibetube_viz_settings', JSON.stringify(settings));
+}
+
+function loadVisualizerSettings() {
+    try {
+        const saved = localStorage.getItem('vibetube_viz_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            if (settings.bassSensitivity !== undefined) {
+                vizBassSensitivity = settings.bassSensitivity;
+                if (vizSensSlider) vizSensSlider.value = vizBassSensitivity;
+                if (vizSensVal) vizSensVal.textContent = vizBassSensitivity.toFixed(1) + 'x';
+            }
+            if (settings.smoothing !== undefined) {
+                vizSmoothing = settings.smoothing;
+                if (vizSmoothSlider) vizSmoothSlider.value = Math.round(vizSmoothing * 100);
+                if (vizSmoothVal) vizSmoothVal.textContent = Math.round(vizSmoothing * 100) + '%';
+                if (analyser) analyser.smoothingTimeConstant = vizSmoothing;
+            }
+            if (settings.colorMode !== undefined) {
+                vizColorMode = settings.colorMode;
+                if (vizColorSelect) vizColorSelect.value = vizColorMode;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load visualizer settings:", e);
     }
 }
 
@@ -3251,4 +3518,104 @@ function initThemeSettings() {
             }
         });
     }
+}
+
+function updateTrackPlayStats(track) {
+    if (!track) return;
+    try {
+        const stats = JSON.parse(localStorage.getItem('vibetube_listening_stats') || '{"totalPlaybacks":0,"totalSeconds":0,"tracks":{},"channels":{}}');
+        
+        stats.totalPlaybacks = (stats.totalPlaybacks || 0) + 1;
+        
+        if (!stats.tracks) stats.tracks = {};
+        if (!stats.tracks[track.id]) {
+            stats.tracks[track.id] = {
+                title: track.title,
+                channel: track.channel,
+                thumbnail: track.thumbnail,
+                count: 0
+            };
+        }
+        stats.tracks[track.id].count++;
+
+        if (!stats.channels) stats.channels = {};
+        const channelName = track.channel || "Unknown Channel";
+        stats.channels[channelName] = (stats.channels[channelName] || 0) + 1;
+
+        localStorage.setItem('vibetube_listening_stats', JSON.stringify(stats));
+    } catch (e) {
+        console.error("Failed to update play stats:", e);
+    }
+}
+
+function renderListeningStats() {
+    const statsView = document.getElementById('history-stats-view');
+    if (!statsView) return;
+
+    const stats = JSON.parse(localStorage.getItem('vibetube_listening_stats') || '{"totalPlaybacks":0,"totalSeconds":0,"tracks":{},"channels":{}}');
+    const totalSeconds = Math.round(stats.totalSeconds || 0);
+    const totalHours = Math.floor(totalSeconds / 3600);
+    const totalMins = Math.floor((totalSeconds % 3600) / 60);
+    const totalPlays = stats.totalPlaybacks || 0;
+
+    const sortedTracks = Object.values(stats.tracks || {}).sort((a, b) => b.count - a.count);
+    const sortedChannels = Object.entries(stats.channels || {}).sort((a, b) => b[1] - a[1]);
+
+    let topTracksHtml = '';
+    if (sortedTracks.length === 0) {
+        topTracksHtml = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0; text-align: center;">Немає даних про прослуховування</p>';
+    } else {
+        topTracksHtml = sortedTracks.slice(0, 5).map((t, idx) => `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                <span style="font-weight: 700; color: var(--neon-cyan); font-size: 0.9rem; min-width: 15px;">#${idx+1}</span>
+                <div style="width: 32px; height: 32px; border-radius: 4px; background-image: url('${t.thumbnail}'); background-size: cover; background-position: center; flex-shrink: 0;"></div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                    <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(t.title)}</span>
+                    <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(t.channel)}</span>
+                </div>
+                <span style="font-size: 0.8rem; font-family: 'Orbitron', sans-serif; color: var(--neon-purple);">${t.count} просл.</span>
+            </div>
+        `).join('');
+    }
+
+    let topChannelsHtml = '';
+    if (sortedChannels.length === 0) {
+        topChannelsHtml = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0; text-align: center;">Немає даних</p>';
+    } else {
+        topChannelsHtml = sortedChannels.slice(0, 5).map((c, idx) => `
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; padding: 4px 6px;">
+                <span style="font-size: 0.85rem; color: var(--text-main); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${idx+1}. ${escapeHTML(c[0])}</span>
+                <span style="font-size: 0.8rem; font-family: 'Orbitron', sans-serif; color: var(--neon-cyan);">${c[1]} треків</span>
+            </div>
+        `).join('');
+    }
+
+    statsView.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 1.5rem;">
+            <div class="card glass" style="padding: 1rem; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-clock"></i> Час прослуховування</span>
+                <span style="font-size: 1.2rem; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-cyan); margin-top: 5px;">
+                    ${totalHours > 0 ? `${totalHours}г ` : ''}${totalMins}хв
+                </span>
+            </div>
+            <div class="card glass" style="padding: 1rem; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-play"></i> Всього відтворень</span>
+                <span style="font-size: 1.2rem; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-purple); margin-top: 5px;">${totalPlays}</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;"><i class="fa-solid fa-trophy text-yellow"></i> Топ-5 Треків</h4>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                ${topTracksHtml}
+            </div>
+        </div>
+
+        <div>
+            <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;"><i class="fa-solid fa-user-astronaut text-blue"></i> Улюблені Канали</h4>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                ${topChannelsHtml}
+            </div>
+        </div>
+    `;
 }
