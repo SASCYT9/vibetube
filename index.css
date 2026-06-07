@@ -1934,6 +1934,22 @@ input[type=range].eq-slider::-webkit-slider-thumb:hover {
     }
 }
 
+.song-radio-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.3rem;
+    transition: var(--transition);
+    padding: 0;
+    line-height: 1;
+}
+
+.song-radio-btn:hover {
+    color: var(--neon-cyan);
+    transform: scale(1.2);
+}
+
 
 
 

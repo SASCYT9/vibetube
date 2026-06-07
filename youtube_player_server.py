@@ -147,16 +147,21 @@ class VibeTubeMPRIS(object):
     def Metadata(self):
         meta = {}
         track_id = self.state.get('track_id', '')
-        meta['mpris:trackid'] = f'/org/mpris/MediaPlayer2/vibetube/track/{track_id}' if track_id else '/org/mpris/MediaPlayer2/vibetube/track/none'
+        tid = track_id if track_id else 'none'
+        # Sanitize to valid D-Bus object path characters (alnum + underscores)
+        clean_tid = "".join([c if c.isalnum() or c == '_' else '_' for c in tid])
+        track_path = f'/org/mpris/MediaPlayer2/vibetube/track/{clean_tid}'
+        
+        meta['mpris:trackid'] = GLib.Variant('o', track_path)
         
         if self.state.get('title'):
-            meta['xesam:title'] = self.state['title']
+            meta['xesam:title'] = GLib.Variant('s', self.state['title'])
         if self.state.get('artist'):
-            meta['xesam:artist'] = [self.state['artist']]
+            meta['xesam:artist'] = GLib.Variant('as', [self.state['artist']])
         if self.state.get('art_url'):
-            meta['mpris:artUrl'] = self.state['art_url']
+            meta['mpris:artUrl'] = GLib.Variant('s', self.state['art_url'])
         if self.state.get('duration_us'):
-            meta['mpris:length'] = int(self.state['duration_us'])
+            meta['mpris:length'] = GLib.Variant('x', int(self.state['duration_us']))
         return meta
 
     @property
@@ -316,6 +321,8 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
             url = 'https://www.youtube.com/playlist?list=WL'
         elif playlist_type == 'history':
             url = ':ythistory'
+        elif playlist_type == 'mix':
+            url = 'https://www.youtube.com/playlist?list=RDMM'
         else:
             self.send_error(400, "Invalid playlist type or missing URL")
             return

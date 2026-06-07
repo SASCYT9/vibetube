@@ -203,12 +203,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load user playlists by default on startup
     loadUserPlaylistsList();
+    
+    // Restore last playing state if available
+    restoreLastState();
 });
 
 // Setup All Events
 function setupEventListeners() {
     // Search Suggestions and shortcuts
     setupSearchSuggestions();
+
+    const songRadioBtn = document.getElementById('song-radio-btn');
+    if (songRadioBtn) {
+        songRadioBtn.addEventListener('click', startSongRadio);
+    }
 
     // Search
     searchBtn.addEventListener('click', performSearch);
@@ -892,6 +900,7 @@ async function loadUserPlaylist(type) {
     if (type === 'liked') title = "Улюблене";
     else if (type === 'later') title = "Черга (Watch Later)";
     else if (type === 'history') title = "Історія переглядів";
+    else if (type === 'mix') title = "Мій мікс (YouTube Mix)";
     
     // Toggle view visibility
     playlistNavHeader.style.display = 'flex';
@@ -1127,6 +1136,18 @@ async function playTrack(track, index, playlist) {
 
     activePlaylist = playlist;
     currentIndex = index;
+    
+    // Save last played track info
+    try {
+        localStorage.setItem('vibetube_last_track', JSON.stringify(track));
+        localStorage.setItem('vibetube_last_playlist', JSON.stringify(playlist));
+        localStorage.setItem('vibetube_last_index', index.toString());
+    } catch (e) {
+        console.error("Failed to save play state to localStorage:", e);
+    }
+    
+    const songRadioBtn = document.getElementById('song-radio-btn');
+    if (songRadioBtn) songRadioBtn.style.display = 'inline-block';
     
     // Update active visual cues
     updatePlaylistItemsUI();
@@ -1418,6 +1439,14 @@ function updateProgress() {
     if (!audio.duration) return;
     
     const current = audio.currentTime;
+    
+    // Save playback position periodically (every 1 second)
+    const currentRounded = Math.floor(current);
+    if (window._lastSavedTime !== currentRounded) {
+        window._lastSavedTime = currentRounded;
+        localStorage.setItem('vibetube_last_time', current.toString());
+    }
+    
     const duration = audio.duration;
     const percentage = (current / duration) * 100;
     
@@ -2381,5 +2410,129 @@ async function syncYoutubeHistory() {
             <i class="fa-solid fa-triangle-exclamation text-red" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.8;"></i>
             <p>Не вдалося завантажити історію. Переконайтеся, що ви авторизовані в YouTube у браузері Firefox на цьому комп'ютері.</p>
         `;
+    }
+}
+
+// Start radio based on the currently playing song
+async function startSongRadio() {
+    if (currentIndex === -1 || !activePlaylist[currentIndex]) return;
+    const currentTrack = activePlaylist[currentIndex];
+    
+    let videoId = currentTrack.id;
+    if (videoId.startsWith('http')) {
+        const urlParams = new URLSearchParams(new URL(videoId).search);
+        if (urlParams.has('v')) {
+            videoId = urlParams.get('v');
+        } else {
+            alert("Радіо підтримується лише для треків з YouTube.");
+            return;
+        }
+    }
+    
+    const radioPlaylistUrl = `https://www.youtube.com/playlist?list=RD${videoId}`;
+    
+    // Switch to search/results tab to show loading state
+    switchTab('results');
+    resultsEmpty.style.display = 'none';
+    resultsList.innerHTML = `
+        <div class="spinner-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2.5rem; color: var(--neon-cyan);"></i>
+            <p style="margin-top: 15px; text-align: center; font-size: 0.95rem;">Створюємо радіостанцію на основі треку "${escapeHTML(currentTrack.title)}"...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/user_playlist?url=${encodeURIComponent(radioPlaylistUrl)}`);
+        if (!response.ok) throw new Error("Failed to load radio playlist");
+        const results = await response.json();
+        
+        if (results.length === 0) {
+            resultsList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fa-solid fa-circle-xmark text-red" style="font-size: 2rem;"></i>
+                    <p>Не вдалося створити радіостанцію для цього треку. Спробуйте інший.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        currentPlaylist = results;
+        renderResultsList();
+        
+        // Auto-play the first track of the radio playlist
+        playTrack(currentPlaylist[0], 0, currentPlaylist);
+    } catch (err) {
+        console.error("Failed to start song radio:", err);
+        resultsList.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-triangle-exclamation text-red" style="font-size: 2rem;"></i>
+                <p>Помилка створення радіостанції: ${err.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Restore last player state from localStorage (track, playlist, position, lyrics)
+function restoreLastState() {
+    try {
+        const lastTrackStr = localStorage.getItem('vibetube_last_track');
+        const lastPlaylistStr = localStorage.getItem('vibetube_last_playlist');
+        const lastIndexStr = localStorage.getItem('vibetube_last_index');
+        const lastTimeStr = localStorage.getItem('vibetube_last_time');
+        
+        if (lastTrackStr && lastPlaylistStr && lastIndexStr) {
+            const track = JSON.parse(lastTrackStr);
+            const playlist = JSON.parse(lastPlaylistStr);
+            const index = parseInt(lastIndexStr);
+            const time = lastTimeStr ? parseFloat(lastTimeStr) : 0;
+            
+            // Set variables
+            activePlaylist = playlist;
+            currentIndex = index;
+            currentPlaylist = playlist;
+            
+            // Set UI details
+            trackTitle.textContent = track.title;
+            trackChannel.textContent = track.channel;
+            trackArtwork.style.backgroundImage = `url('${track.thumbnail}')`;
+            if (track.thumbnail) {
+                extractDominantColor(track.thumbnail);
+            }
+            
+            // Show radio button
+            const songRadioBtn = document.getElementById('song-radio-btn');
+            if (songRadioBtn) songRadioBtn.style.display = 'inline-block';
+            
+            // Set audio source but do NOT auto-play
+            audio.src = `/api/stream?id=${encodeURIComponent(track.id)}`;
+            
+            // Re-apply speed and pitch preservation settings
+            const currentRate = parseFloat(speedSlider.value);
+            audio.playbackRate = currentRate;
+            audio.preservesPitch = preservePitchCheckbox.checked;
+            
+            // Wait for audio metadata to load before seeking
+            audio.addEventListener('loadedmetadata', function onMetadata() {
+                audio.currentTime = time;
+                
+                // Update scrubber UI
+                const percentage = (time / audio.duration) * 100;
+                progressFill.style.width = `${percentage}%`;
+                progressHandle.style.left = `${percentage}%`;
+                currentTimeLabel.textContent = formatTime(time);
+                totalTimeLabel.textContent = formatTime(audio.duration);
+                
+                audio.removeEventListener('loadedmetadata', onMetadata);
+            });
+            
+            // Pre-load lyrics in the background
+            fetchLyrics(track.channel, track.title);
+            
+            // Render the restored playlist in the main view
+            renderResultsList();
+            updatePlaylistItemsUI();
+        }
+    } catch (e) {
+        console.error("Failed to restore last player state:", e);
     }
 }
