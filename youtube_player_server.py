@@ -526,14 +526,28 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
                     if 'soundcloud.com' in webpage_url:
                         track_id = webpage_url
                         
-                    thumbnail = data.get('thumbnail', '')
-                    if not thumbnail and data.get('thumbnails'):
-                        thumbnail = data.get('thumbnails')[0].get('url', '')
+                    # Extract the highest resolution thumbnail (Spotify quality)
+                    thumbnail = ""
+                    if data.get('thumbnails'):
+                        valid_thumbs = [t for t in data.get('thumbnails') if t.get('url')]
+                        if valid_thumbs:
+                            valid_thumbs.sort(key=lambda x: (x.get('width') or 0, x.get('height') or 0))
+                            thumbnail = valid_thumbs[-1].get('url', '')
+
+                    if not thumbnail:
+                        thumbnail = data.get('thumbnail', '')
+
+                    # Upgrade YouTube thumbnail quality to highres (hqdefault instead of mqdefault/default)
+                    if thumbnail and ('youtube.com' in thumbnail or 'ytimg.com' in thumbnail):
+                        for low_res in ['default.jpg', 'mqdefault.jpg']:
+                            if low_res in thumbnail:
+                                thumbnail = thumbnail.replace(low_res, 'hqdefault.jpg')
+
                     if not thumbnail:
                         if 'soundcloud.com' in webpage_url:
                             thumbnail = 'https://a-v2.sndcdn.com/assets/images/default_avatar_large-6503c401.png'
                         else:
-                            thumbnail = f'https://img.youtube.com/vi/{video_id}/mqdefault.jpg'
+                            thumbnail = f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
 
                     results.append({
                         'id': track_id,

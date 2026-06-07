@@ -70,6 +70,42 @@
                     <div class="visualizer-container">
                         <video id="visualizer-video" loop muted playsinline style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; pointer-events: none; position: absolute; top: 0; left: 0; z-index: 1; transition: transform 0.1s ease, filter 0.1s ease;"></video>
                         <canvas id="visualizer-canvas" style="position: relative; z-index: 2; display: block;"></canvas>
+                        
+                        <!-- Fullscreen Media Overlay (Spotify TV Style) -->
+                        <div class="fullscreen-overlay" id="fullscreen-overlay" style="display: none;">
+                            <div class="fs-overlay-bg" id="fs-overlay-bg"></div>
+                            
+                            <div class="fs-content">
+                                <div class="fs-track-card">
+                                    <div class="fs-artwork" id="fullscreen-artwork"></div>
+                                    <div class="fs-details">
+                                        <h1 id="fullscreen-title">Не відтворюється</h1>
+                                        <p id="fullscreen-artist">Немає виконавця</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="fs-controls-panel">
+                                    <div class="fs-timeline-row">
+                                        <span class="fs-time" id="fs-current-time">0:00</span>
+                                        <div class="fs-progress-container" id="fs-progress-bar">
+                                            <div class="fs-progress-fill" id="fs-progress-fill"></div>
+                                        </div>
+                                        <span class="fs-time" id="fs-total-time">0:00</span>
+                                    </div>
+                                    <div class="fs-buttons-row">
+                                        <button class="fs-ctrl-btn" id="fs-prev-btn" title="Попередній трек">
+                                            <i class="fa-solid fa-backward-step"></i>
+                                        </button>
+                                        <button class="fs-ctrl-btn fs-play-btn" id="fs-play-btn" title="Грати / Пауза">
+                                            <i class="fa-solid fa-play"></i>
+                                        </button>
+                                        <button class="fs-ctrl-btn" id="fs-next-btn" title="Наступний трек">
+                                            <i class="fa-solid fa-forward-step"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Scrubber / Timeline -->

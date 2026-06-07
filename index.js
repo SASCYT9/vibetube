@@ -145,7 +145,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // Resize visualizer canvas
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-    document.addEventListener('fullscreenchange', resizeCanvas);
+    document.addEventListener('fullscreenchange', () => {
+        resizeCanvas();
+        const fsOverlay = document.getElementById('fullscreen-overlay');
+        if (fsOverlay) {
+            if (document.fullscreenElement) {
+                fsOverlay.style.display = 'flex';
+                // Initialize fullscreen details from active track
+                if (currentIndex !== -1 && activePlaylist[currentIndex]) {
+                    const track = activePlaylist[currentIndex];
+                    const fsTitle = document.getElementById('fullscreen-title');
+                    const fsArtist = document.getElementById('fullscreen-artist');
+                    const fsArtwork = document.getElementById('fullscreen-artwork');
+                    const fsTotalTime = document.getElementById('fs-total-time');
+                    if (fsTitle) fsTitle.textContent = track.title;
+                    if (fsArtist) fsArtist.textContent = track.channel;
+                    if (fsArtwork) fsArtwork.style.backgroundImage = `url('${track.thumbnail}')`;
+                    if (fsTotalTime) fsTotalTime.textContent = track.duration;
+                }
+                const fsPlayIcon = document.querySelector('#fs-play-btn i');
+                if (fsPlayIcon) {
+                    fsPlayIcon.className = audio.paused ? 'fa-solid fa-play' : 'fa-solid fa-pause';
+                }
+            } else {
+                fsOverlay.style.display = 'none';
+                fsOverlay.classList.remove('idle');
+            }
+        }
+    });
     
     // Bind Event Listeners
     setupEventListeners();
@@ -193,6 +220,8 @@ function setupEventListeners() {
     audio.addEventListener('play', () => {
         isPlaying = true;
         playIcon.className = 'fa-solid fa-pause';
+        const fsPlayIcon = document.querySelector('#fs-play-btn i');
+        if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-pause';
         trackArtwork.classList.add('playing');
         fetch('/api/mpris_update?status=Playing').catch(err => console.error(err));
 
@@ -201,6 +230,8 @@ function setupEventListeners() {
     audio.addEventListener('pause', () => {
         isPlaying = false;
         playIcon.className = 'fa-solid fa-play';
+        const fsPlayIcon = document.querySelector('#fs-play-btn i');
+        if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-play';
         trackArtwork.classList.remove('playing');
         fetch('/api/mpris_update?status=Paused').catch(err => console.error(err));
     });
@@ -303,6 +334,40 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Fullscreen Overlay Event Listeners
+    const fsPlayBtn = document.getElementById('fs-play-btn');
+    const fsPrevBtn = document.getElementById('fs-prev-btn');
+    const fsNextBtn = document.getElementById('fs-next-btn');
+    const fsProgressBar = document.getElementById('fs-progress-bar');
+    const fsOverlay = document.getElementById('fullscreen-overlay');
+
+    if (fsPlayBtn) fsPlayBtn.addEventListener('click', togglePlayback);
+    if (fsPrevBtn) fsPrevBtn.addEventListener('click', playPrevious);
+    if (fsNextBtn) fsNextBtn.addEventListener('click', playNext);
+
+    if (fsProgressBar) {
+        fsProgressBar.addEventListener('click', (e) => {
+            if (!audio.src || !audio.duration) return;
+            const rect = fsProgressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            const percentage = clickX / width;
+            audio.currentTime = percentage * audio.duration;
+        });
+    }
+
+    // Fullscreen Mouse Idle Auto-hide Controls (3 seconds of inactivity)
+    let fsTimeout = null;
+    document.addEventListener('mousemove', () => {
+        if (document.fullscreenElement && fsOverlay) {
+            fsOverlay.classList.remove('idle');
+            clearTimeout(fsTimeout);
+            fsTimeout = setTimeout(() => {
+                fsOverlay.classList.add('idle');
+            }, 3000);
+        }
+    });
 
     // YouTube History Sync Event
     loadYtHistoryBtn.addEventListener('click', syncYoutubeHistory);
@@ -1044,6 +1109,16 @@ async function playTrack(track, index, playlist) {
     // Set UI track info
     trackTitle.textContent = track.title;
     trackChannel.textContent = track.channel;
+
+    // Fullscreen track info
+    const fsTitle = document.getElementById('fullscreen-title');
+    const fsArtist = document.getElementById('fullscreen-artist');
+    const fsArtwork = document.getElementById('fullscreen-artwork');
+    const fsTotalTime = document.getElementById('fs-total-time');
+    if (fsTitle) fsTitle.textContent = track.title;
+    if (fsArtist) fsArtist.textContent = track.channel;
+    if (fsArtwork) fsArtwork.style.backgroundImage = `url('${track.thumbnail}')`;
+    if (fsTotalTime) fsTotalTime.textContent = track.duration;
     
     // Scrolling marquee animation for long titles
     setupMarquee();
@@ -1325,6 +1400,12 @@ function updateProgress() {
     progressHandle.style.left = `${percentage}%`;
     
     currentTimeLabel.textContent = formatTime(current);
+
+    // Fullscreen timeline sync
+    const fsCurrentTime = document.getElementById('fs-current-time');
+    const fsProgressFill = document.getElementById('fs-progress-fill');
+    if (fsCurrentTime) fsCurrentTime.textContent = formatTime(current);
+    if (fsProgressFill) fsProgressFill.style.width = `${percentage}%`;
 
     // Synced lyrics highlight & scroll
     if (syncedLyrics.length > 0) {
