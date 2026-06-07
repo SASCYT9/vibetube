@@ -27,6 +27,10 @@
             <button class="title-bar-btn close-btn" id="win-close-btn" title="Закрити"><i class="fa-solid fa-xmark"></i></button>
         </div>
     </div>
+    <div class="fluid-background-container">
+        <div class="fluid-background-art" id="fluid-bg-art"></div>
+        <div class="fluid-background-overlay"></div>
+    </div>
     <div class="bg-glow"></div>
     <div class="app-container">
         <!-- Header -->
@@ -86,6 +90,9 @@
                             <button id="like-btn" class="like-btn" title="Додати до улюблених">
                                 <i class="fa-regular fa-heart"></i>
                             </button>
+                            <button id="add-to-playlist-btn" class="like-btn" title="Додати до плейлиста" style="margin-left: 5px;">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
                         </div>
                         <p id="track-channel">Знайдіть трек, щоб розпочати відтворення</p>
                     </div>
@@ -100,6 +107,11 @@
                             <div class="fs-overlay-bg" id="fs-overlay-bg"></div>
                             
                             <div class="fs-content">
+                                <div class="fs-top-row" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+                                    <div class="fs-logo" style="font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 1.2rem; color: var(--primary-glow); text-shadow: 0 0 10px var(--primary-glow-rgba);">VIBETUBE</div>
+                                    <div id="fs-clock" style="font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 600; color: #ffffff; opacity: 0.85; text-shadow: 0 0 15px rgba(255,255,255,0.2);">00:00</div>
+                                </div>
+                                
                                 <div class="fs-track-card">
                                     <div class="fs-artwork" id="fullscreen-artwork"></div>
                                     <div class="fs-details">
@@ -259,6 +271,10 @@
                                     <i class="fa-solid fa-file-audio"></i> Відтворити локальний аудіофайл
                                 </button>
                                 <input type="file" id="local-file-input" accept="audio/*" style="display: none;">
+                            </div>
+                            <div class="custom-playlist-loader" style="margin-top: 10px; display: flex; gap: 8px;">
+                                <input type="text" id="local-playlist-title-input" placeholder="Назва нового плейлиста..." style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; flex: 1;">
+                                <button id="create-local-playlist-btn" class="mode-btn" style="border-color: var(--primary-glow); color: var(--primary-glow); font-size: 0.8rem; padding: 8px 12px; white-space: nowrap;"><i class="fa-solid fa-folder-plus"></i> Створити плейлист</button>
                             </div>
                             <div class="account-actions" style="margin-top: 0.75rem;">
                                 <button class="account-btn" data-type="liked"><i class="fa-solid fa-heart text-red"></i> Улюблене</button>
@@ -598,9 +614,16 @@
                                     <option value="60">60 хвилин</option>
                                 </select>
                             </div>
-                            <div id="sleep-timer-status" style="font-size: 0.8rem; color: var(--text-muted); display: none; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-hourglass-half fa-spin text-cyan"></i>
-                                <span>Залишилось: <span id="sleep-timer-countdown" style="color: var(--primary-glow); font-weight: bold;">--:--</span></span>
+                            <div id="sleep-timer-status" style="font-size: 0.8rem; color: var(--text-muted); display: none; flex-direction: column; gap: 8px; align-items: flex-start;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-hourglass-half fa-spin text-cyan"></i>
+                                    <span>Залишилось: <span id="sleep-timer-countdown" style="color: var(--primary-glow); font-weight: bold;">--:--</span></span>
+                                </div>
+                                <label class="checkbox-container" id="sleep-suspend-container" style="padding-left: 28px; line-height: 1.4; display: block; position: relative; margin-top: 4px;">
+                                    <input type="checkbox" id="sleep-suspend-checkbox">
+                                    <span class="checkmark"></span>
+                                    Призупинити ПК після завершення
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -751,6 +774,25 @@
                 <button class="preset-btn sleep-option-btn" data-minutes="120">2 години</button>
             </div>
             <div id="sleep-status-text" style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem; color: var(--neon-cyan); font-family: 'Orbitron', sans-serif; min-height: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Add to Playlist Modal Overlay -->
+    <div class="theme-modal-overlay" id="add-to-playlist-modal">
+        <div class="theme-modal card glass" style="max-width: 400px; padding: 1.5rem;">
+            <div class="card-header" style="margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h3><i class="fa-solid fa-folder-plus" style="color: var(--primary-glow);"></i> Додати до плейлиста</h3>
+                <button class="theme-modal-close-btn" id="add-to-playlist-close" title="Закрити">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="add-to-playlist-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem; padding-right: 5px;">
+                <!-- Local playlists list will go here -->
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                <input type="text" id="add-to-playlist-new-title" placeholder="Назва плейлиста..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; flex: 1;">
+                <button id="add-to-playlist-create-btn" class="mode-btn" style="border-color: var(--primary-glow); color: var(--primary-glow); font-size: 0.8rem; padding: 8px 12px; white-space: nowrap;">Створити плейлист</button>
+            </div>
         </div>
     </div>
 

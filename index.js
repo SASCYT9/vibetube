@@ -16,6 +16,7 @@ let isMuted = false;
 let previousVolume = 0.7;
 let likedTracks = [];
 let syncedLyrics = [];
+let fsClockInterval = null;
 let currentLyricsIndex = -1;
 let lastFmTrack = null;
 let lastFmStartTime = 0;
@@ -237,6 +238,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadVisualizerSettings();
     // Load liked tracks
     loadLikedTracks();
+    // Load local playlists
+    loadLocalPlaylists();
     // Resize visualizer canvas
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -262,9 +265,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (fsPlayIcon) {
                     fsPlayIcon.className = audio.paused ? 'fa-solid fa-play' : 'fa-solid fa-pause';
                 }
+                
+                // Fullscreen Clock
+                updateFullscreenClock();
+                if (fsClockInterval) clearInterval(fsClockInterval);
+                fsClockInterval = setInterval(updateFullscreenClock, 1000);
             } else {
                 fsOverlay.style.display = 'none';
                 fsOverlay.classList.remove('idle');
+                if (fsClockInterval) {
+                    clearInterval(fsClockInterval);
+                    fsClockInterval = null;
+                }
             }
         }
     });
@@ -1424,10 +1436,54 @@ async function loadUserPlaylistsList() {
 function renderUserPlaylistsGrid(playlists) {
     playlistsGrid.innerHTML = '';
     
-    // Filter out "Watch later" since we have a dedicated button for it
+    // First render local playlists
+    localPlaylists.forEach((playlist, index) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-card-item local-playlist';
+        item.style.animationDelay = `${index * 0.03}s`;
+        
+        const countText = `${playlist.tracks.length} треків`;
+        
+        item.innerHTML = `
+            <div class="playlist-card-thumb">
+                <i class="fa-solid fa-folder-open" style="color: var(--primary-glow); font-size: 1.5rem;"></i>
+                <div class="playlist-play-hover">
+                    <i class="fa-solid fa-play"></i>
+                </div>
+            </div>
+            <div class="playlist-card-info">
+                <div class="playlist-card-title" title="${escapeHTML(playlist.title)}">${escapeHTML(playlist.title)}</div>
+                <div class="playlist-card-meta">Локальний плейлист • ${countText}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="delete-local-playlist-btn" data-id="${playlist.id}" title="Видалити плейлист" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 5px; transition: color 0.2s;"><i class="fa-solid fa-trash"></i></button>
+                <i class="fa-solid fa-chevron-right play-arrow-icon" style="font-size: 0.9rem; color: var(--text-muted); transition: var(--transition);"></i>
+            </div>
+        `;
+        
+        const delBtn = item.querySelector('.delete-local-playlist-btn');
+        if (delBtn) {
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`Ви дійсно хочете видалити локальний плейлист "${playlist.title}"?`)) {
+                    localPlaylists = localPlaylists.filter(p => p.id !== playlist.id);
+                    saveLocalPlaylists();
+                    renderUserPlaylistsGrid(playlists);
+                }
+            });
+        }
+        
+        item.addEventListener('click', () => {
+            loadLocalPlaylistTracks(playlist);
+        });
+        
+        playlistsGrid.appendChild(item);
+    });
+    
+    // Now render remote YouTube playlists
     const filteredPlaylists = playlists.filter(p => p.id !== 'WL');
     
-    if (filteredPlaylists.length === 0) {
+    if (filteredPlaylists.length === 0 && localPlaylists.length === 0) {
         playlistsGrid.innerHTML = `
             <p style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
                 У вашому YouTube акаунті не знайдено створених плейлистів.
@@ -3121,6 +3177,10 @@ function parseLrc(lrcText) {
 
 // Dynamic Color Extraction
 function extractDominantColor(imgUrl) {
+    // Also set fluid background artwork
+    const fluidBgArt = document.getElementById('fluid-bg-art');
+    if (fluidBgArt) fluidBgArt.style.backgroundImage = `url('${imgUrl}')`;
+
     if (themeMode !== 'auto') return;
 
     const img = new Image();
@@ -3927,7 +3987,27 @@ let sleepTimerRemaining = 0; // in seconds
 let originalVolumeBeforeFade = null;
 let isFadingVolume = false;
 
+// Local Playlists State Management
+let localPlaylists = [];
+function loadLocalPlaylists() {
+    const saved = localStorage.getItem('vibetube_local_playlists');
+    if (saved) {
+        try {
+            localPlaylists = JSON.parse(saved);
+        } catch (e) {
+            console.error("Failed to load local playlists:", e);
+            localPlaylists = [];
+        }
+    }
+}
+function saveLocalPlaylists() {
+    localStorage.setItem('vibetube_local_playlists', JSON.stringify(localPlaylists));
+}
+
 function initSettingsIntegrations() {
+    // Call UI setup for local playlists
+    initLocalPlaylistsUI();
+
     // 1. Settings Tab Switching
     const tabBtns = document.querySelectorAll('.settings-tab-btn');
     const tabPanes = document.querySelectorAll('.settings-tab-pane');
@@ -4110,6 +4190,8 @@ function initSettingsIntegrations() {
     const sleepTimerSelect = document.getElementById('sleep-timer-select');
     const sleepTimerStatus = document.getElementById('sleep-timer-status');
     const sleepTimerCountdown = document.getElementById('sleep-timer-countdown');
+    const sleepSuspendContainer = document.getElementById('sleep-suspend-container');
+    const sleepSuspendCheckbox = document.getElementById('sleep-suspend-checkbox');
 
     if (sleepTimerSelect) {
         sleepTimerSelect.addEventListener('change', (e) => {
@@ -4133,11 +4215,14 @@ function initSettingsIntegrations() {
             
             if (minutes === 0) {
                 if (sleepTimerStatus) sleepTimerStatus.style.display = 'none';
+                if (sleepSuspendContainer) sleepSuspendContainer.style.display = 'none';
+                if (sleepSuspendCheckbox) sleepSuspendCheckbox.checked = false;
                 return;
             }
             
             sleepTimerRemaining = minutes * 60;
             if (sleepTimerStatus) sleepTimerStatus.style.display = 'flex';
+            if (sleepSuspendContainer) sleepSuspendContainer.style.display = 'block';
             
             const updateTimerDisplay = () => {
                 const mins = Math.floor(sleepTimerRemaining / 60);
@@ -4188,9 +4273,20 @@ function initSettingsIntegrations() {
                     isFadingVolume = false;
                     originalVolumeBeforeFade = null;
                     
+                    // Check if system suspend is requested
+                    const shouldSuspend = sleepSuspendCheckbox && sleepSuspendCheckbox.checked;
+                    
                     // Reset dropdown and UI status
                     sleepTimerSelect.value = "0";
                     if (sleepTimerStatus) sleepTimerStatus.style.display = 'none';
+                    if (sleepSuspendContainer) sleepSuspendContainer.style.display = 'none';
+                    if (sleepSuspendCheckbox) sleepSuspendCheckbox.checked = false;
+                    
+                    if (shouldSuspend && window.electronAPI && typeof window.electronAPI.suspendSystem === 'function') {
+                        setTimeout(() => {
+                            window.electronAPI.suspendSystem();
+                        }, 1500);
+                    }
                 }
             }, 1000);
         });
@@ -4772,6 +4868,217 @@ function toggleVolumeNormalizer(enabled) {
         }
     } catch (e) {
         console.error("Failed to toggle volume normalizer:", e);
+    }
+}
+
+function updateFullscreenClock() {
+    const fsClock = document.getElementById('fs-clock');
+    if (!fsClock) return;
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, '0');
+    const mm = now.getMinutes().toString().padStart(2, '0');
+    fsClock.textContent = `${hh}:${mm}`;
+}
+
+function loadLocalPlaylistTracks(playlist) {
+    playlistNavHeader.style.display = 'flex';
+    activePlaylistName.textContent = playlist.title;
+    playlistsSelectionView.style.display = 'none';
+    accountList.style.display = 'block';
+    
+    accountEmpty.style.display = 'none';
+    accountList.innerHTML = '';
+    
+    if (playlist.tracks.length === 0) {
+        accountList.innerHTML = `
+            <p style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+                Цей плейлист порожній. Додайте треки за допомогою кнопки "+" під час відтворення.
+            </p>
+        `;
+        return;
+    }
+    
+    playlist.tracks.forEach((track, index) => {
+        const item = document.createElement('div');
+        item.className = 'track-item';
+        item.dataset.index = index;
+        
+        const count = index + 1;
+        
+        item.innerHTML = `
+            <div class="track-item-num">${count}</div>
+            <div class="track-item-thumb" style="background-image: url('${track.thumbnail}')">
+                <div class="track-item-thumb-play">
+                    <i class="fa-solid fa-play"></i>
+                </div>
+            </div>
+            <div class="track-item-details">
+                <div class="track-item-title">${escapeHTML(track.title)}</div>
+                <div class="track-item-channel">${escapeHTML(track.channel)}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="remove-track-from-playlist-btn" title="Видалити з плейлиста" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 5px; transition: color 0.2s;"><i class="fa-solid fa-xmark"></i></button>
+                <div class="track-item-duration">${track.duration || '00:00'}</div>
+            </div>
+        `;
+        
+        const removeBtn = item.querySelector('.remove-track-from-playlist-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playlist.tracks.splice(index, 1);
+                saveLocalPlaylists();
+                loadLocalPlaylistTracks(playlist);
+            });
+        }
+        
+        item.addEventListener('click', () => {
+            playTrack(track, index, playlist.tracks);
+        });
+        
+        accountList.appendChild(item);
+    });
+}
+
+function initLocalPlaylistsUI() {
+    const createPlaylistBtn = document.getElementById('create-local-playlist-btn');
+    const titleInput = document.getElementById('local-playlist-title-input');
+    const addToPlaylistBtn = document.getElementById('add-to-playlist-btn');
+    const addToPlaylistModal = document.getElementById('add-to-playlist-modal');
+    const addToPlaylistClose = document.getElementById('add-to-playlist-close');
+    const addToPlaylistList = document.getElementById('add-to-playlist-list');
+    const addToPlaylistNewTitle = document.getElementById('add-to-playlist-new-title');
+    const addToPlaylistCreateBtn = document.getElementById('add-to-playlist-create-btn');
+
+    if (createPlaylistBtn && titleInput) {
+        createPlaylistBtn.addEventListener('click', () => {
+            const title = titleInput.value.trim();
+            if (!title) {
+                alert("Будь ласка, введіть назву плейлиста.");
+                return;
+            }
+            
+            const newPlaylist = {
+                id: 'local_playlist_' + Date.now(),
+                title: title,
+                tracks: []
+            };
+            localPlaylists.push(newPlaylist);
+            saveLocalPlaylists();
+            titleInput.value = '';
+            
+            renderUserPlaylistsGrid(userPlaylists);
+        });
+    }
+
+    if (addToPlaylistBtn && addToPlaylistModal) {
+        addToPlaylistBtn.addEventListener('click', () => {
+            if (currentIndex === -1 || !activePlaylist[currentIndex]) {
+                alert("Спочатку запустіть відтворення треку.");
+                return;
+            }
+            
+            addToPlaylistModal.classList.add('active');
+            addToPlaylistModal.style.opacity = '1';
+            addToPlaylistModal.style.pointerEvents = 'auto';
+            
+            renderAddToPlaylistList();
+        });
+    }
+
+    if (addToPlaylistClose && addToPlaylistModal) {
+        addToPlaylistClose.addEventListener('click', () => {
+            addToPlaylistModal.classList.remove('active');
+            addToPlaylistModal.style.opacity = '0';
+            addToPlaylistModal.style.pointerEvents = 'none';
+        });
+        
+        addToPlaylistModal.addEventListener('click', (e) => {
+            if (e.target === addToPlaylistModal) {
+                addToPlaylistModal.classList.remove('active');
+                addToPlaylistModal.style.opacity = '0';
+                addToPlaylistModal.style.pointerEvents = 'none';
+            }
+        });
+    }
+
+    const renderAddToPlaylistList = () => {
+        if (!addToPlaylistList) return;
+        addToPlaylistList.innerHTML = '';
+        
+        if (localPlaylists.length === 0) {
+            addToPlaylistList.innerHTML = `
+                <p style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                    У вас немає створених локальних плейлистів. Створіть новий нижче.
+                </p>
+            `;
+            return;
+        }
+        
+        localPlaylists.forEach(playlist => {
+            const row = document.createElement('div');
+            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;";
+            
+            row.innerHTML = `
+                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-folder" style="color: var(--primary-glow); margin-right: 8px;"></i> ${escapeHTML(playlist.title)}</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">${playlist.tracks.length} треків</span>
+            `;
+            
+            row.addEventListener('mouseover', () => {
+                row.style.background = "rgba(255,255,255,0.06)";
+                row.style.borderColor = "rgba(255,255,255,0.05)";
+            });
+            row.addEventListener('mouseout', () => {
+                row.style.background = "rgba(255,255,255,0.03)";
+                row.style.borderColor = "transparent";
+            });
+            
+            row.addEventListener('click', () => {
+                const track = activePlaylist[currentIndex];
+                if (!track) return;
+                
+                const alreadyExists = playlist.tracks.some(t => t.id === track.id);
+                if (alreadyExists) {
+                    alert("Цей трек вже додано до цього плейлиста.");
+                    return;
+                }
+                
+                playlist.tracks.push(track);
+                saveLocalPlaylists();
+                
+                addToPlaylistModal.classList.remove('active');
+                addToPlaylistModal.style.opacity = '0';
+                addToPlaylistModal.style.pointerEvents = 'none';
+                
+                alert(`Трек "${track.title}" додано до плейлиста "${playlist.title}"!`);
+                
+                renderUserPlaylistsGrid(userPlaylists);
+            });
+            
+            addToPlaylistList.appendChild(row);
+        });
+    };
+
+    if (addToPlaylistCreateBtn && addToPlaylistNewTitle) {
+        addToPlaylistCreateBtn.addEventListener('click', () => {
+            const title = addToPlaylistNewTitle.value.trim();
+            if (!title) {
+                alert("Будь ласка, введіть назву плейлиста.");
+                return;
+            }
+            
+            const newPlaylist = {
+                id: 'local_playlist_' + Date.now(),
+                title: title,
+                tracks: []
+            };
+            localPlaylists.push(newPlaylist);
+            saveLocalPlaylists();
+            addToPlaylistNewTitle.value = '';
+            
+            renderAddToPlaylistList();
+            renderUserPlaylistsGrid(userPlaylists);
+        });
     }
 }
 

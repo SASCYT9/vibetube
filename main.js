@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, globalShortcut, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, globalShortcut, screen, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -201,8 +201,43 @@ function updateDiscordActivity(title, artist, isPlaying, duration, currentTime) 
     }
 }
 
+let lastNotificationTitle = '';
+
 ipcMain.on('track-changed', (event, data) => {
     updateDiscordActivity(data.title, data.artist, data.isPlaying, data.duration, data.currentTime);
+    
+    // Show notification when song changes and is playing
+    if (data.isPlaying && data.title && data.title !== lastNotificationTitle) {
+        lastNotificationTitle = data.title;
+        
+        setTimeout(() => {
+            try {
+                // Check if this song is still current before showing notification
+                if (lastNotificationTitle !== data.title) return;
+                
+                const iconPath = path.join(__dirname, '.cache', 'current_art.jpg');
+                const resolvedIcon = fs.existsSync(iconPath) ? iconPath : path.join(__dirname, 'icon.png');
+                
+                const notification = new Notification({
+                    title: data.title,
+                    body: data.artist || 'VibeTube',
+                    icon: resolvedIcon,
+                    silent: true
+                });
+                
+                notification.on('click', () => {
+                    if (mainWindow) {
+                        mainWindow.show();
+                        mainWindow.focus();
+                    }
+                });
+                
+                notification.show();
+            } catch (e) {
+                console.error("Failed to show notification:", e);
+            }
+        }, 1500); // 1.5 seconds delay allows backend to fetch and cache cover art
+    }
 });
 
 function startPythonServer() {
@@ -425,6 +460,24 @@ X-GNOME-Autostart-enabled=true
 
 ipcMain.on('set-autostart', (event, enabled) => {
     setAutostartEnabled(enabled);
+});
+
+ipcMain.on('system-suspend', () => {
+    console.log("System suspend requested by sleep timer.");
+    const { exec } = require('child_process');
+    if (process.platform === 'linux') {
+        exec('systemctl suspend', (err) => {
+            if (err) console.error("Failed to suspend Linux system:", err);
+        });
+    } else if (process.platform === 'win32') {
+        exec('rundll32.exe powrprof.dll,SetSuspendState 0,1,0', (err) => {
+            if (err) console.error("Failed to suspend Windows system:", err);
+        });
+    } else if (process.platform === 'darwin') {
+        exec('pmset sleepnow', (err) => {
+            if (err) console.error("Failed to suspend macOS system:", err);
+        });
+    }
 });
 
 app.whenReady().then(() => {

@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onGlobalShortcutMedia: (callback) => ipcRenderer.on('global-shortcut-media', (event, action) => callback(action)),
     updateTrackMetadata: (data) => ipcRenderer.send('track-changed', data),
     setAutostart: (enabled) => ipcRenderer.send('set-autostart', enabled),
+    suspendSystem: () => ipcRenderer.send('system-suspend'),
     md5: (str) => require('crypto').createHash('md5').update(str, 'utf8').digest('hex')
 });
