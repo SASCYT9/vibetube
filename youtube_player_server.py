@@ -322,7 +322,7 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
         elif playlist_type == 'history':
             url = ':ythistory'
         elif playlist_type == 'mix':
-            url = 'https://www.youtube.com/playlist?list=RDMM'
+            url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDMM'
         else:
             self.send_error(400, "Invalid playlist type or missing URL")
             return

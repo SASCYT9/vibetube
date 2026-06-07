@@ -136,6 +136,11 @@ const PRESETS = {
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    // Request desktop notification permission on startup
+    if (window.Notification && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+    }
+
     // Custom window control listeners for frameless mode
     const winMinBtn = document.getElementById('win-min-btn');
     const winMaxBtn = document.getElementById('win-max-btn');
@@ -2444,8 +2449,7 @@ async function startSongRadio() {
             return;
         }
     }
-    
-    const radioPlaylistUrl = `https://www.youtube.com/playlist?list=RD${videoId}`;
+    const radioPlaylistUrl = `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`;
     
     // Switch to search/results tab to show loading state
     switchTab('results');
@@ -2609,5 +2613,26 @@ function updateSystemMediaControls(track) {
         
         // Set playback state
         navigator.mediaSession.playbackState = 'playing';
+    }
+
+    // 3. Show native OS desktop notification
+    showTrackNotification(track);
+}
+
+// Track change desktop notification handler to prevent overlapping notification spam
+let currentNotification = null;
+function showTrackNotification(track) {
+    if (!track || !window.Notification) return;
+    
+    if (Notification.permission === 'granted') {
+        if (currentNotification) {
+            currentNotification.close();
+        }
+        
+        currentNotification = new Notification("VibeTube — Зараз грає", {
+            body: `${track.title}\n${track.channel}`,
+            icon: track.thumbnail || '',
+            silent: true
+        });
     }
 }
