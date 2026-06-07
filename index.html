@@ -560,6 +560,53 @@
 
                     <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
 
+                    <!-- Audio & Volume Settings -->
+                    <div class="theme-section" style="margin-bottom: 1.5rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-volume-high text-purple"></i> Звук та Аудіовиходи</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                            <!-- Volume Normalizer Checkbox -->
+                            <label class="checkbox-container" style="padding-left: 28px; line-height: 1.4; display: block; position: relative; margin-bottom: 8px;">
+                                <input type="checkbox" id="normalizer-checkbox">
+                                <span class="checkmark"></span>
+                                Розумна нормалізація гучності (вирівнювання звуку)
+                            </label>
+                            
+                            <!-- Audio output selection -->
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 5px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-solid fa-headphones"></i> Пристрій виходу:</span>
+                                <select id="audio-output-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; cursor: pointer; flex: 1; max-width: 220px;">
+                                    <option value="default">За замовчуванням (Система)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+
+                    <!-- Sleep Timer Section -->
+                    <div class="theme-section" style="margin-bottom: 1.5rem;">
+                        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-clock text-cyan"></i> Таймер сну</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                            <div class="theme-slider-row" style="display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted); min-width: 140px;"><i class="fa-regular fa-bell"></i> Зупинити через:</span>
+                                <select id="sleep-timer-select" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; cursor: pointer; flex: 1; max-width: 220px;">
+                                    <option value="0" selected>Вимкнено</option>
+                                    <option value="5">5 хвилин</option>
+                                    <option value="15">15 хвилин</option>
+                                    <option value="30">30 хвилин</option>
+                                    <option value="45">45 хвилин</option>
+                                    <option value="60">60 хвилин</option>
+                                </select>
+                            </div>
+                            <div id="sleep-timer-status" style="font-size: 0.8rem; color: var(--text-muted); display: none; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-hourglass-half fa-spin text-cyan"></i>
+                                <span>Залишилось: <span id="sleep-timer-countdown" style="color: var(--primary-glow); font-weight: bold;">--:--</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="eq-divider" style="height: 1px; background: rgba(255, 255, 255, 0.05); margin: 1.25rem 0;"></div>
+
                     <!-- Last.fm Section -->
                     <div class="theme-section">
                         <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-brands fa-lastfm text-red"></i> Скробблер Last.fm</h4>

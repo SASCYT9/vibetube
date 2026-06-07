@@ -1,11 +1,14 @@
-const { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, globalShortcut, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
 let pyServer = null;
 let tray = null;
 let isQuitting = false;
+let isMiniPlayer = false;
+let stateFilePath = '';
 
 // IPC handlers for custom frameless window title bar controls
 ipcMain.handle('get-system-accent-color', () => {
@@ -42,6 +45,7 @@ ipcMain.on('window-close', () => {
 // Toggle mini player size and properties
 ipcMain.on('window-toggle-mini', (event, isMini) => {
     if (mainWindow) {
+        isMiniPlayer = isMini;
         if (isMini) {
             mainWindow.setMinimumSize(340, 400);
             mainWindow.setSize(340, 400);
@@ -50,7 +54,23 @@ ipcMain.on('window-toggle-mini', (event, isMini) => {
         } else {
             mainWindow.setResizable(true);
             mainWindow.setMinimumSize(800, 600);
-            mainWindow.setSize(1250, 850);
+            
+            // Restore saved size if available, otherwise default to 1250x850
+            let restoredWidth = 1250;
+            let restoredHeight = 850;
+            try {
+                if (fs.existsSync(stateFilePath)) {
+                    const saved = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+                    if (saved.width && saved.height) {
+                        restoredWidth = saved.width;
+                        restoredHeight = saved.height;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load saved dimensions for restoring from mini:", e);
+            }
+            
+            mainWindow.setSize(restoredWidth, restoredHeight);
             mainWindow.setAlwaysOnTop(false);
             mainWindow.center();
         }
@@ -202,10 +222,71 @@ function startPythonServer() {
     });
 }
 
+function saveWindowState() {
+    if (!mainWindow || isMiniPlayer) return;
+    try {
+        const isMaximized = mainWindow.isMaximized();
+        let state = {};
+        if (fs.existsSync(stateFilePath)) {
+            try {
+                state = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+            } catch (e) {}
+        }
+        state.isMaximized = isMaximized;
+        if (!isMaximized) {
+            const bounds = mainWindow.getBounds();
+            state.width = bounds.width;
+            state.height = bounds.height;
+            state.x = bounds.x;
+            state.y = bounds.y;
+        }
+        fs.writeFileSync(stateFilePath, JSON.stringify(state), 'utf8');
+    } catch (e) {
+        console.error("Failed to save window state:", e);
+    }
+}
+
 function createWindow() {
-    mainWindow = new BrowserWindow({
+    stateFilePath = path.join(app.getPath('userData'), 'window-state.json');
+    let windowState = {
         width: 1250,
         height: 850,
+        x: undefined,
+        y: undefined,
+        isMaximized: false
+    };
+
+    try {
+        if (fs.existsSync(stateFilePath)) {
+            windowState = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+        }
+    } catch (e) {
+        console.error("Failed to load window state:", e);
+    }
+
+    // Verify window is on-screen
+    if (windowState.x !== undefined && windowState.y !== undefined) {
+        const displays = screen.getAllDisplays();
+        const isVisible = displays.some(display => {
+            const bounds = display.bounds;
+            return (
+                windowState.x >= bounds.x - 50 &&
+                windowState.y >= bounds.y - 50 &&
+                windowState.x < bounds.x + bounds.width - 50 &&
+                windowState.y < bounds.y + bounds.height - 50
+            );
+        });
+        if (!isVisible) {
+            windowState.x = undefined;
+            windowState.y = undefined;
+        }
+    }
+
+    mainWindow = new BrowserWindow({
+        width: windowState.width,
+        height: windowState.height,
+        x: windowState.x,
+        y: windowState.y,
         title: "VibeTube — YouTube Плеєр з Еквалайзером",
         frame: false,
         icon: path.join(__dirname, 'icon.png'),
@@ -218,6 +299,14 @@ function createWindow() {
         backgroundColor: '#08090f',
         show: false // Show only when ready to avoid flashing white screen
     });
+
+    if (windowState.isMaximized) {
+        mainWindow.maximize();
+    }
+
+    // Track resize and move to save window state
+    mainWindow.on('resize', saveWindowState);
+    mainWindow.on('move', saveWindowState);
 
     // Load page
     setTimeout(() => {

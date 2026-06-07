@@ -3,6 +3,7 @@ let audioCtx = null;
 let source = null;
 let filters = [];
 let analyser = null;
+let normalizerNode = null;
 let currentPlaylist = [];
 let currentIndex = -1;
 let historyPlaylist = [];
@@ -2047,6 +2048,20 @@ function initAudio() {
     reverbDelay.connect(reverbWetGain);
     reverbWetGain.connect(analyser);
     
+    // Create Volume Normalizer Compressor
+    normalizerNode = audioCtx.createDynamicsCompressor();
+    const normEnabled = localStorage.getItem('vibetube_volume_normalization') === 'true';
+    if (normEnabled) {
+        normalizerNode.threshold.setValueAtTime(-24.0, audioCtx.currentTime);
+        normalizerNode.knee.setValueAtTime(30.0, audioCtx.currentTime);
+        normalizerNode.ratio.setValueAtTime(12.0, audioCtx.currentTime);
+        normalizerNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        normalizerNode.release.setValueAtTime(0.25, audioCtx.currentTime);
+    } else {
+        normalizerNode.threshold.setValueAtTime(0.0, audioCtx.currentTime);
+        normalizerNode.ratio.setValueAtTime(1.0, audioCtx.currentTime);
+    }
+
     // Create Limiter to prevent clipping and digital distortion
     const limiter = audioCtx.createDynamicsCompressor();
     limiter.threshold.setValueAtTime(-1.0, audioCtx.currentTime); // Clamp at -1dB
@@ -2055,8 +2070,15 @@ function initAudio() {
     limiter.attack.setValueAtTime(0.003, audioCtx.currentTime);    // Fast attack (3ms)
     limiter.release.setValueAtTime(0.08, audioCtx.currentTime);    // Fast release (80ms)
 
-    analyser.connect(limiter);
+    analyser.connect(normalizerNode);
+    normalizerNode.connect(limiter);
     limiter.connect(audioCtx.destination);
+
+    // Restore saved audio output device if available
+    const savedSinkId = localStorage.getItem('vibetube_audio_sink_id');
+    if (savedSinkId && typeof audio.setSinkId === 'function') {
+        audio.setSinkId(savedSinkId).catch(err => console.error("Failed to restore audio sink device:", err));
+    }
     
     // Start canvas visualizer loop
     startVisualizer();
@@ -3900,6 +3922,11 @@ const LastFm = {
     }
 };
 
+let sleepTimerId = null;
+let sleepTimerRemaining = 0; // in seconds
+let originalVolumeBeforeFade = null;
+let isFadingVolume = false;
+
 function initSettingsIntegrations() {
     // 1. Settings Tab Switching
     const tabBtns = document.querySelectorAll('.settings-tab-btn');
@@ -3946,6 +3973,62 @@ function initSettingsIntegrations() {
             localStorage.setItem('vibetube_autostart', enabled ? 'true' : 'false');
             if (window.electronAPI && typeof window.electronAPI.setAutostart === 'function') {
                 window.electronAPI.setAutostart(enabled);
+            }
+        });
+    }
+
+    // 2.5. Volume Normalizer & Audio Output Device Selector
+    const normalizerCheckbox = document.getElementById('normalizer-checkbox');
+    if (normalizerCheckbox) {
+        const normEnabled = localStorage.getItem('vibetube_volume_normalization') === 'true';
+        normalizerCheckbox.checked = normEnabled;
+        normalizerCheckbox.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            localStorage.setItem('vibetube_volume_normalization', enabled ? 'true' : 'false');
+            toggleVolumeNormalizer(enabled);
+        });
+    }
+
+    const audioOutputSelect = document.getElementById('audio-output-select');
+    if (audioOutputSelect) {
+        const populateDevices = async () => {
+            try {
+                if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+                    await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+                }
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const outputs = devices.filter(d => d.kind === 'audiooutput');
+                
+                audioOutputSelect.innerHTML = '';
+                
+                outputs.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Пристрій виходу (${device.deviceId.slice(0, 5)}...)`;
+                    audioOutputSelect.appendChild(option);
+                });
+                
+                const savedSinkId = localStorage.getItem('vibetube_audio_sink_id') || 'default';
+                audioOutputSelect.value = savedSinkId;
+            } catch (e) {
+                console.error("Failed to populate audio devices:", e);
+            }
+        };
+
+        populateDevices();
+
+        audioOutputSelect.addEventListener('change', (e) => {
+            const deviceId = e.target.value;
+            if (typeof audio.setSinkId === 'function') {
+                audio.setSinkId(deviceId)
+                    .then(() => {
+                        localStorage.setItem('vibetube_audio_sink_id', deviceId);
+                    })
+                    .catch(err => {
+                        console.error("Failed to set audio output device:", err);
+                        alert("Не вдалося перемкнути пристрій відтворення.");
+                    });
             }
         });
     }
@@ -4020,6 +4103,96 @@ function initSettingsIntegrations() {
                 LastFm.disconnect();
                 updateLastFmUI();
             }
+        });
+    }
+
+    // 2.7. Sleep Timer UI Setup & Handler
+    const sleepTimerSelect = document.getElementById('sleep-timer-select');
+    const sleepTimerStatus = document.getElementById('sleep-timer-status');
+    const sleepTimerCountdown = document.getElementById('sleep-timer-countdown');
+
+    if (sleepTimerSelect) {
+        sleepTimerSelect.addEventListener('change', (e) => {
+            const minutes = parseInt(e.target.value);
+            
+            // Clear any existing intervals
+            if (sleepTimerId) {
+                clearInterval(sleepTimerId);
+                sleepTimerId = null;
+            }
+            
+            // If fading, restore volume
+            if (isFadingVolume && originalVolumeBeforeFade !== null) {
+                audio.volume = originalVolumeBeforeFade;
+                volumeSlider.value = originalVolumeBeforeFade;
+                updateVolumeUI(originalVolumeBeforeFade);
+                fetch(`/api/mpris_update?volume=${originalVolumeBeforeFade}`).catch(err => console.error(err));
+            }
+            isFadingVolume = false;
+            originalVolumeBeforeFade = null;
+            
+            if (minutes === 0) {
+                if (sleepTimerStatus) sleepTimerStatus.style.display = 'none';
+                return;
+            }
+            
+            sleepTimerRemaining = minutes * 60;
+            if (sleepTimerStatus) sleepTimerStatus.style.display = 'flex';
+            
+            const updateTimerDisplay = () => {
+                const mins = Math.floor(sleepTimerRemaining / 60);
+                const secs = sleepTimerRemaining % 60;
+                if (sleepTimerCountdown) {
+                    sleepTimerCountdown.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+            };
+            
+            updateTimerDisplay();
+            
+            sleepTimerId = setInterval(() => {
+                if (sleepTimerRemaining > 0) {
+                    sleepTimerRemaining--;
+                    updateTimerDisplay();
+                    
+                    // Start fading out volume in the last 10 seconds of the timer
+                    if (sleepTimerRemaining <= 10 && !isFadingVolume && isPlaying) {
+                        isFadingVolume = true;
+                        originalVolumeBeforeFade = audio.volume;
+                    }
+                    
+                    if (isFadingVolume && originalVolumeBeforeFade !== null) {
+                        // Fade volume linearly from originalVolumeBeforeFade to 0
+                        const factor = sleepTimerRemaining / 10; // 1.0 down to 0.0
+                        const tempVol = originalVolumeBeforeFade * factor;
+                        audio.volume = tempVol;
+                        volumeSlider.value = tempVol;
+                        updateVolumeUI(tempVol);
+                    }
+                } else {
+                    clearInterval(sleepTimerId);
+                    sleepTimerId = null;
+                    
+                    // Stop playback
+                    if (isPlaying) {
+                        audio.pause();
+                    }
+                    
+                    // Restore original volume after stopping, so it's ready for next use
+                    if (originalVolumeBeforeFade !== null) {
+                        audio.volume = originalVolumeBeforeFade;
+                        volumeSlider.value = originalVolumeBeforeFade;
+                        updateVolumeUI(originalVolumeBeforeFade);
+                        fetch(`/api/mpris_update?volume=${originalVolumeBeforeFade}`).catch(err => console.error(err));
+                    }
+                    
+                    isFadingVolume = false;
+                    originalVolumeBeforeFade = null;
+                    
+                    // Reset dropdown and UI status
+                    sleepTimerSelect.value = "0";
+                    if (sleepTimerStatus) sleepTimerStatus.style.display = 'none';
+                }
+            }, 1000);
         });
     }
 
@@ -4583,3 +4756,22 @@ function initLyricsCardCreatorUI() {
         saveBtn.addEventListener('click', downloadLyricCard);
     }
 }
+
+function toggleVolumeNormalizer(enabled) {
+    if (!normalizerNode || !audioCtx) return;
+    try {
+        if (enabled) {
+            normalizerNode.threshold.setValueAtTime(-24.0, audioCtx.currentTime);
+            normalizerNode.knee.setValueAtTime(30.0, audioCtx.currentTime);
+            normalizerNode.ratio.setValueAtTime(12.0, audioCtx.currentTime);
+            normalizerNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
+            normalizerNode.release.setValueAtTime(0.25, audioCtx.currentTime);
+        } else {
+            normalizerNode.threshold.setValueAtTime(0.0, audioCtx.currentTime);
+            normalizerNode.ratio.setValueAtTime(1.0, audioCtx.currentTime);
+        }
+    } catch (e) {
+        console.error("Failed to toggle volume normalizer:", e);
+    }
+}
+
