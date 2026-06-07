@@ -539,9 +539,9 @@ class YTPlayerHandler(BaseHTTPRequestHandler):
 
                     # Upgrade YouTube thumbnail quality to highres (hqdefault instead of mqdefault/default)
                     if thumbnail and ('youtube.com' in thumbnail or 'ytimg.com' in thumbnail):
-                        for low_res in ['default.jpg', 'mqdefault.jpg']:
+                        for low_res in ['/default.jpg', '/mqdefault.jpg']:
                             if low_res in thumbnail:
-                                thumbnail = thumbnail.replace(low_res, 'hqdefault.jpg')
+                                thumbnail = thumbnail.replace(low_res, '/hqdefault.jpg')
 
                     if not thumbnail:
                         if 'soundcloud.com' in webpage_url:
