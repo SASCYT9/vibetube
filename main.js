@@ -1,9 +1,28 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
 let pyServer = null;
+
+// IPC handlers for custom frameless window title bar controls
+ipcMain.on('window-minimize', () => {
+    if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+    if (mainWindow) {
+        if (mainWindow.isMaximized()) {
+            mainWindow.unmaximize();
+        } else {
+            mainWindow.maximize();
+        }
+    }
+});
+
+ipcMain.on('window-close', () => {
+    if (mainWindow) mainWindow.close();
+});
 
 function startPythonServer() {
     console.log("Starting Python backend server...");
@@ -27,9 +46,11 @@ function createWindow() {
         width: 1250,
         height: 850,
         title: "VibeTube — YouTube Плеєр з Еквалайзером",
+        frame: false,
         webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         },
         autoHideMenuBar: true, // Hides top menus for a clean native app look
         backgroundColor: '#08090f',

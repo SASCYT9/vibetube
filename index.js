@@ -136,6 +136,27 @@ const PRESETS = {
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    // Custom window control listeners for frameless mode
+    const winMinBtn = document.getElementById('win-min-btn');
+    const winMaxBtn = document.getElementById('win-max-btn');
+    const winCloseBtn = document.getElementById('win-close-btn');
+
+    if (winMinBtn) {
+        winMinBtn.addEventListener('click', () => {
+            if (window.electronAPI) window.electronAPI.minimize();
+        });
+    }
+    if (winMaxBtn) {
+        winMaxBtn.addEventListener('click', () => {
+            if (window.electronAPI) window.electronAPI.maximize();
+        });
+    }
+    if (winCloseBtn) {
+        winCloseBtn.addEventListener('click', () => {
+            if (window.electronAPI) window.electronAPI.close();
+        });
+    }
+
     // Load history from localStorage
     loadHistory();
     // Load saved Equalizer from localStorage
