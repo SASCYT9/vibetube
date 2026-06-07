@@ -24,6 +24,20 @@ ipcMain.on('window-close', () => {
     if (mainWindow) mainWindow.close();
 });
 
+// Update Windows Taskbar progress bar
+ipcMain.on('playback-progress-changed', (event, percentage) => {
+    if (mainWindow) {
+        const val = parseFloat(percentage);
+        if (!isNaN(val)) {
+            if (val <= 0 || val >= 100) {
+                mainWindow.setProgressBar(-1);
+            } else {
+                mainWindow.setProgressBar(val / 100);
+            }
+        }
+    }
+});
+
 function startPythonServer() {
     console.log("Starting Python backend server...");
     pyServer = spawn('python3', [path.join(__dirname, 'youtube_player_server.py')]);
@@ -72,6 +86,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // Set App User Model ID for Windows notifications grouping
+    app.setAppUserModelId('org.vibetube.player');
+    
     startPythonServer();
     createWindow();
 

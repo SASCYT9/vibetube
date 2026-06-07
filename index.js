@@ -213,6 +213,9 @@ function setupEventListeners() {
     // Search Suggestions and shortcuts
     setupSearchSuggestions();
 
+    // Initialize HTML5 Media Session action handlers (for Windows/macOS controls)
+    initMediaSessionHandlers();
+
     const songRadioBtn = document.getElementById('song-radio-btn');
     if (songRadioBtn) {
         songRadioBtn.addEventListener('click', startSongRadio);
@@ -254,7 +257,10 @@ function setupEventListeners() {
         trackArtwork.classList.add('playing');
         fetch('/api/mpris_update?status=Playing').catch(err => console.error(err));
 
-        // Video elements are not used anymore for visualizations
+        // Update Media Session playback state
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+        }
     });
     audio.addEventListener('pause', () => {
         isPlaying = false;
@@ -263,6 +269,11 @@ function setupEventListeners() {
         if (fsPlayIcon) fsPlayIcon.className = 'fa-solid fa-play';
         trackArtwork.classList.remove('playing');
         fetch('/api/mpris_update?status=Paused').catch(err => console.error(err));
+
+        // Update Media Session playback state
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'paused';
+        }
     });
 
     // Volume
@@ -1204,7 +1215,7 @@ async function playTrack(track, index, playlist) {
     try {
         await audio.play();
         addToHistory(track);
-        mprisUpdateTrack(track);
+        updateSystemMediaControls(track);
         // Load lyrics in the background
         fetchLyrics(track.channel, track.title);
         // Pre-resolve the next track in the playlist
@@ -1452,6 +1463,11 @@ function updateProgress() {
     
     progressFill.style.width = `${percentage}%`;
     progressHandle.style.left = `${percentage}%`;
+    
+    // Send progress to main process (Windows taskbar progress)
+    if (window.electronAPI && window.electronAPI.updateProgress) {
+        window.electronAPI.updateProgress(percentage);
+    }
     
     currentTimeLabel.textContent = formatTime(current);
 
@@ -2534,5 +2550,64 @@ function restoreLastState() {
         }
     } catch (e) {
         console.error("Failed to restore last player state:", e);
+    }
+}
+
+// Initialize HTML5 Media Session action handlers (Windows/macOS controls compatibility)
+function initMediaSessionHandlers() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => {
+            if (audio.src && !isPlaying) {
+                audio.play().catch(e => console.error(e));
+            }
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+            if (audio.src && isPlaying) {
+                audio.pause();
+            }
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            playPrevious();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            playNext();
+        });
+        
+        // Support seeking in Media Session
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.fastSeek && 'fastSeek' in audio) {
+                audio.fastSeek(details.seekTime);
+            } else {
+                audio.currentTime = details.seekTime;
+            }
+        });
+    }
+}
+
+// Update system media controls across platforms (MPRIS on Linux + Media Session on Windows/macOS)
+function updateSystemMediaControls(track) {
+    if (!track) return;
+    
+    // 1. Update MPRIS (for Linux DBus)
+    mprisUpdateTrack(track);
+    
+    // 2. Update HTML5 Media Session (for Windows SMTC & macOS Now Playing)
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.title,
+            artist: track.channel,
+            album: 'VibeTube',
+            artwork: [
+                { src: track.thumbnail, sizes: '96x96',   type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '128x128', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '192x192', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '384x384', type: 'image/jpeg' },
+                { src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }
+            ]
+        });
+        
+        // Set playback state
+        navigator.mediaSession.playbackState = 'playing';
     }
 }
